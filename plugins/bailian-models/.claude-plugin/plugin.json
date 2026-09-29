@@ -1,0 +1,13 @@
+{
+  "name": "bailian-models",
+  "version": "1.1.0",
+  "description": "Route WorkBuddy official model names to Alibaba Bailian (DashScope) via ~/.codebuddy/models.json",
+  "author": { "name": "AlgernonYin" },
+  "hooks": "hooks/hooks.json",
+  "mcpServers": {
+    "bailian-models": {
+      "command": "node",
+      "args": ["${CODEBUDDY_PLUGIN_ROOT}/scripts/mcp-sync.cjs"]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "workbuddy-3p",
+  "description": "Route WorkBuddy official model names to third-party OpenAI-compatible APIs (Alibaba Bailian / DashScope)",
+  "owner": { "name": "AlgernonYin" },
+  "plugins": [
+    { "name": "bailian-models", "description": "Route WorkBuddy official model names to Alibaba Bailian (DashScope)", "version": "1.1.0", "source": "./plugins/bailian-models" }
+  ]
+}
