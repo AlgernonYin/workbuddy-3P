@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-**版本：** 2.2.0
+**版本：** 2.2.1
 
 WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkBuddy / CodeBuddy Code。它让模型选择使用你自己的 OpenAI 兼容 API。网页端和手机端共用同一套云沙箱机制，因此不需要修改网页或客户端。
 
@@ -10,7 +10,7 @@ WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkB
 
 ## 原理
 
-- `SessionStart` hook 和 stdio MCP server 启动时都会运行 `sync-models.cjs`。并发同步会用 `~/.codebuddy/workbuddy-3p.lock` 串行化，文件写入均为原子替换。
+- `SessionStart` hook 和 stdio MCP server 启动时都会运行 `sync-models.cjs`。并发同步会用 `~/.codebuddy/workbuddy-3p.lock` 串行化。已有 `models.json` 保留 inode 原位写入，以兼容宿主的文件监视器；状态文件原子替换。
 - 同步脚本写入 `~/.codebuddy/models.json`，权限为 `600`。
 - 每条第三方模型以目标上游模型 ID 作为自定义模型 ID，`aliases` 中保存需要解析到它的 WorkBuddy 官方 ID。WorkBuddy 将这些自定义槽位显示为 `custom-local:<model-id>`。
 - `availableModels` 只隐藏实际被路由的官方 ID；上游模型 ID 不会仅因为它是自定义模型 ID 而被隐藏。如果用户原有 allowlist 含被路由的官方 ID，插件会暂时移除，卸载或切回官方时恢复。

@@ -1,6 +1,6 @@
 {
   "name": "custom-api-models",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Route WorkBuddy / CodeBuddy Code cloud model choices to your own OpenAI-compatible APIs, with an official / third-party switch",
   "author": { "name": "AlgernonYin", "url": "https://github.com/AlgernonYin" },
   "homepage": "https://github.com/AlgernonYin/workbuddy-3P",

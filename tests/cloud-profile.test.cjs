@@ -32,3 +32,12 @@ test('malformed profile errors never quote secret JSON fragments',t=>{
   const f=fixture(t);f.put('a','{"apiKey":"fake-profile-secret",BROKEN');
   const r=f.run();assert.notEqual(r.status,0);assert.ok(!r.stderr.includes('fake-profile-secret'));
 });
+test('repeated switches preserve models inode for CodeBuddy fs.watch',t=>{
+  const f=fixture(t); f.put('a',f.profile); assert.equal(f.run().status,0);
+  const target=path.join(f.dir,'models.json'), inode=fs.statSync(target).ino;
+  for(const mode of ['--official','--third-party','--official','--third-party']) {
+    const r=f.run(mode);assert.equal(r.status,0,r.stderr);
+    assert.equal(fs.statSync(target).ino,inode,'rename would detach the host watcher');
+    JSON.parse(fs.readFileSync(target));
+  }
+});

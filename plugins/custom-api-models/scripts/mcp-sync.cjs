@@ -3,7 +3,7 @@
 // the MCP status change makes the CLI reload models, so a fresh sandbox picks up the routes.
 "use strict";
 const lib = require("./sync-models.cjs");
-const VERSION = "2.2.0";
+const VERSION = "2.2.1";
 const errOut = (e) => ({ ok: false, error: String(e && e.message || e) });
 let status = { ok: false, reason: "pending" };
 const ready = lib.sync().catch(errOut).then(s => { status = s; });

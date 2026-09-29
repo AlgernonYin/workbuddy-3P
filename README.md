@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 2.2.0
+**Version:** 2.2.1
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets the model picker use an OpenAI-compatible API that you control. The web and mobile clients share the same cloud sandbox mechanism, so no client or web page changes are required.
 
@@ -10,7 +10,7 @@ The plugin writes only the model configuration it manages. Existing user models 
 
 ## How it works
 
-- The `SessionStart` hook and the stdio MCP server both run `sync-models.cjs` when they start. Concurrent syncs are serialized with `~/.codebuddy/workbuddy-3p.lock`, and file writes are atomic replacements.
+- The `SessionStart` hook and the stdio MCP server both run `sync-models.cjs` when they start. Concurrent syncs are serialized with `~/.codebuddy/workbuddy-3p.lock`. Existing `models.json` is written in place to preserve the inode watched by CodeBuddy; state files use atomic replacement.
 - The sync script writes `~/.codebuddy/models.json` with mode `600`.
 - A routed model is a custom model using an upstream model ID. Its `aliases` contain the official WorkBuddy IDs that should resolve to it. WorkBuddy exposes these custom slots as `custom-local:<model-id>`.
 - `availableModels` hides only official IDs that are actually routed; an upstream model ID is not hidden just because it is the custom model ID. If the user's original allowlist contains a routed official ID, it is removed temporarily and restored on uninstall or switch to official.

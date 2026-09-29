@@ -325,8 +325,23 @@ function stripManaged(cur, state) {
 
 function writeModels(p, before, text) {
   if (before === text) return false;
-  if (before !== null && !fs.existsSync(p.backup)) fs.copyFileSync(p.models, p.backup);
-  writeAtomic(p.models, text);
+  if (before === null) {
+    writeAtomic(p.models, text);
+  } else {
+    if (!fs.existsSync(p.backup)) { fs.copyFileSync(p.models, p.backup); fs.chmodSync(p.backup, 0o600); }
+    // CodeBuddy 2.155 watches the inode, not the parent directory. Rename replacement
+    // fires once then leaves its watcher attached to an unlinked inode. Preserve it
+    // for every subsequent switch; sync/uninstall share the cross-process lock.
+    const fd = fs.openSync(p.models, "r+");
+    try {
+      fs.fchmodSync(fd, 0o600);
+      const bytes = Buffer.from(text);
+      let offset = 0;
+      while (offset < bytes.length) offset += fs.writeSync(fd, bytes, offset, bytes.length - offset, offset);
+      fs.ftruncateSync(fd, bytes.length);
+      fs.fsyncSync(fd);
+    } finally { fs.closeSync(fd); }
+  }
   return true;
 }
 
