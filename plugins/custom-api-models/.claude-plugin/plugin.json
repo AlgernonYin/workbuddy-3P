@@ -1,0 +1,23 @@
+{
+  "name": "custom-api-models",
+  "version": "2.0.0",
+  "description": "Route WorkBuddy / CodeBuddy Code cloud model choices to your own OpenAI-compatible APIs (Bailian, OpenRouter, self-hosted, ...)",
+  "author": { "name": "AlgernonYin", "url": "https://github.com/AlgernonYin" },
+  "homepage": "https://github.com/AlgernonYin/workbuddy-3P",
+  "repository": "https://github.com/AlgernonYin/workbuddy-3P",
+  "license": "MIT",
+  "keywords": ["workbuddy", "codebuddy", "models", "openai-compatible", "bailian", "dashscope"],
+  "hooks": "hooks/hooks.json",
+  "mcpServers": {
+    "custom-api-models": {
+      "command": "node",
+      "args": ["${CODEBUDDY_PLUGIN_ROOT}/scripts/mcp-sync.cjs"]
+    }
+  },
+  "userConfig": {
+    "PRESET": { "type": "string", "title": "Preset", "description": "Provider preset when no config file exists (e.g. bailian). Leave empty with BASE_URL for same-name routing.", "default": "" },
+    "BASE_URL": { "type": "string", "title": "Base URL", "description": "OpenAI-compatible base URL, e.g. https://api.example.com/v1", "default": "" },
+    "API_KEY": { "type": "string", "title": "API key", "description": "API key for the default provider", "sensitive": true, "default": "" },
+    "ROUTES": { "type": "string", "title": "Routes (JSON)", "description": "Optional JSON object: {\"glm-5.3\":\"my-model\",\"kimi-k3\":\"official\"}", "default": "" }
+  }
+}
