@@ -25,7 +25,7 @@ const paths = (dir = configDir()) => ({
 function readJsonStrict(p, what) {
   let text;
   try { text = fs.readFileSync(p, "utf8"); } catch (e) { if (e.code === "ENOENT") return null; fail(`${what} ${p}: ${e.message}`); }
-  try { return JSON.parse(text); } catch (e) { fail(`${what} ${p} is not valid JSON: ${e.message}`); }
+  try { return JSON.parse(text); } catch { fail(`${what} ${p} is not valid JSON`); }
 }
 const readJsonLoose = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
 const readText = (p) => { try { return fs.readFileSync(p, "utf8").trim(); } catch { return ""; } };
@@ -89,22 +89,44 @@ function configCandidates(dir) {
   return [ENV.WB3P_CONFIG, path.join(dir, "workbuddy-3p.json"), "/etc/workbuddy-3p/config.json",
           "/opt/workbuddy-3p/config.json", path.join(ROOT, "config.json")].filter(Boolean);
 }
+// A private account skill carries data only. Never search public plugin caches for keys.
+function cloudProfile(dir) {
+  const skillDir = path.join(dir, "skills");
+  let entries;
+  try { entries = fs.readdirSync(skillDir, { withFileTypes: true }); }
+  catch (e) { if (e.code === "ENOENT") return null; throw e; }
+  const found = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const p = path.join(skillDir, entry.name, "workbuddy-3p.profile.json");
+    let st;
+    try { st = fs.lstatSync(p); } catch (e) { if (e.code === "ENOENT") continue; throw e; }
+    if (!st.isFile() || st.isSymbolicLink()) fail("cloud profile must be a regular file");
+    found.push(p);
+  }
+  if (found.length > 1) fail("multiple cloud profiles found; keep one private workbuddy-3p profile");
+  if (!found.length) return null;
+  const profile = readJsonStrict(found[0], "cloud profile");
+  if (!isObj(profile) || profile.kind !== "workbuddy-3p-private-profile" || profile.version !== 1 || !isObj(profile.config))
+    fail("invalid cloud profile schema");
+  return { cfg: profile.config, from: found[0] };
+}
 function loadConfig(dir) {
   if (ENV.WB3P_CONFIG_JSON) {
     try { return { cfg: JSON.parse(ENV.WB3P_CONFIG_JSON), from: "$WB3P_CONFIG_JSON" }; }
-    catch (e) { fail(`WB3P_CONFIG_JSON is not valid JSON: ${e.message}`); }
+    catch { fail("WB3P_CONFIG_JSON is not valid JSON"); }
   }
   if (ENV.WB3P_CONFIG && !fs.existsSync(ENV.WB3P_CONFIG)) fail(`WB3P_CONFIG points to a missing file: ${ENV.WB3P_CONFIG}`);
   for (const p of configCandidates(dir)) { const j = readJsonStrict(p, "config"); if (j !== null) return { cfg: j, from: p }; }
   // Zero-file setup. No provider is guessed: either BASE_URL or PRESET must be given explicitly.
   const baseUrl = ENV.WB3P_BASE_URL || opt("BASE_URL");
   const preset = ENV.WB3P_PRESET || opt("PRESET");
-  if (!baseUrl && !preset) return { cfg: null, from: "none" };
+  if (!baseUrl && !preset) return cloudProfile(dir) || { cfg: null, from: "none" };
   const name = preset || "custom";
   const cfg = { providers: { [name]: { preset: preset || undefined, baseUrl: baseUrl || undefined } }, default: name };
   const routes = ENV.WB3P_ROUTES || opt("ROUTES");
   if (routes) {
-    try { cfg.routes = JSON.parse(routes); } catch (e) { fail(`ROUTES is not valid JSON: ${e.message}`); }
+    try { cfg.routes = JSON.parse(routes); } catch { fail("ROUTES is not valid JSON"); }
   }
   return { cfg, from: "env" };
 }

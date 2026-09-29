@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-**版本：** 2.1.0
+**版本：** 2.2.0
 
 WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkBuddy / CodeBuddy Code。它让模型选择使用你自己的 OpenAI 兼容 API。网页端和手机端共用同一套云沙箱机制，因此不需要修改网页或客户端。
 
@@ -50,7 +50,15 @@ WB3P_API_KEY=<your-api-key>
 
 ### 新沙箱与密钥
 
-对云端 WorkBuddy，优先使用插件选项 `API_KEY`（前提是你的平台会把插件选项同步到新沙箱，请用 `models_status` 确认）；否则使用每个沙箱都能访问的私有 `apiKeyUrl`；不要依赖某一个旧沙箱本地的环境变量或文件。
+云端网页在当前实测版本没有可用的插件选项保存入口；自定义 MCP 保存也会报 `saveConfiguration` 未定义。推荐将配置打成**个人私有技能包**，通过 WorkBuddy 的个人技能上传入口同步到新沙箱：
+
+```bash
+python scripts/make-private-profile.py --config /opt/workbuddy-3p/config.json --output /tmp/account-private-profile.zip --embed-keys
+```
+
+上传得到的 ZIP 至自己的个人技能资产，切勿发布到技能市场、分享下载链接或提交 Git。这个包含 `SKILL.md`（无密钥）和 `workbuddy-3p.profile.json`（含私密配置）；平台上传预检会要求确认凭据风险。它不是加密的密钥保险库，账号和沙箱内有权限的进程可以读取。
+
+插件只在本机配置和显式环境变量都未设置时，读取 `<config-dir>/skills/*/workbuddy-3p.profile.json`。文件必须带固定格式标记；多个配置包会报错以避免选错账户。用 `models_status` 确认实际读取路径和路由状态。更新配置需要重新上传私有包；沙箱本地开关只影响该沙箱。
 
 ### 使用配置文件
 
@@ -362,7 +370,7 @@ node scripts/sync-models.cjs --uninstall
 在仓库根目录运行：
 
 ```bash
-node --test tests/sync-models.test.cjs
+node --test tests/*.test.cjs
 ```
 
 ## License

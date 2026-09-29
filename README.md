@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 2.1.0
+**Version:** 2.2.0
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets the model picker use an OpenAI-compatible API that you control. The web and mobile clients share the same cloud sandbox mechanism, so no client or web page changes are required.
 
@@ -50,7 +50,15 @@ If neither `BASE_URL` nor `PRESET` is set, the plugin does no routing. There is 
 
 ### New sandboxes and keys
 
-For cloud WorkBuddy, prefer the plugin option `API_KEY` (provided your platform syncs plugin options to new sandboxes; confirm with `models_status`). Otherwise use a private `apiKeyUrl` reachable from every sandbox. Do not depend on an environment variable or file that exists only in one old sandbox.
+The tested cloud web version has no working plugin-option save control; custom MCP saving also fails with `saveConfiguration` undefined. Use an **account-private skill package** to distribute the profile to fresh sandboxes:
+
+```bash
+python scripts/make-private-profile.py --config /opt/workbuddy-3p/config.json --output /tmp/account-private-profile.zip --embed-keys
+```
+
+Import the ZIP into your own personal skill assets. Never publish it to a marketplace, share its download URL, or commit it. It contains a credential-free `SKILL.md` and a private `workbuddy-3p.profile.json`. The upload preflight asks for credential confirmation. This is not an encrypted credential vault; authorized account and sandbox processes can read it.
+
+Only when local config and explicit provider environment options are absent, the plugin reads `<config-dir>/skills/*/workbuddy-3p.profile.json`. A fixed schema marker is required, and multiple packages cause an error. Confirm the source and routing with `models_status`. Re-upload the private package to change account defaults; the local switch affects only its sandbox.
 
 ### Configure with a file
 
@@ -362,7 +370,7 @@ or restore the first pre-change backup:
 From the repository root:
 
 ```bash
-node --test tests/sync-models.test.cjs
+node --test tests/*.test.cjs
 ```
 
 ## License
