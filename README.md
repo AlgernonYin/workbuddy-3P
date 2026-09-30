@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 2.2.1
+**Version:** 2.2.2
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets the model picker use an OpenAI-compatible API that you control. The web and mobile clients share the same cloud sandbox mechanism, so no client or web page changes are required.
 
@@ -10,7 +10,7 @@ The plugin writes only the model configuration it manages. Existing user models 
 
 ## How it works
 
-- The `SessionStart` hook and the stdio MCP server both run `sync-models.cjs` when they start. Concurrent syncs are serialized with `~/.codebuddy/workbuddy-3p.lock`. Existing `models.json` is written in place to preserve the inode watched by CodeBuddy; state files use atomic replacement.
+- The `SessionStart` hook and the stdio MCP server both run `sync-models.cjs` when they start. Sync, switch, and uninstall operations are serialized with `~/.codebuddy/workbuddy-3p.lock`. Existing `models.json` is written in place to preserve the inode watched by CodeBuddy; state files use atomic replacement. Ordinary write failures are rolled back, but this is not a crash-atomic transaction across files, and an in-place update can leave a brief read window for the host.
 - The sync script writes `~/.codebuddy/models.json` with mode `600`.
 - A routed model is a custom model using an upstream model ID. Its `aliases` contain the official WorkBuddy IDs that should resolve to it. WorkBuddy exposes these custom slots as `custom-local:<model-id>`.
 - `availableModels` hides only official IDs that are actually routed; an upstream model ID is not hidden just because it is the custom model ID. If the user's original allowlist contains a routed official ID, it is removed temporarily and restored on uninstall or switch to official.
@@ -23,7 +23,7 @@ The plugin writes only the model configuration it manages. Existing user models 
 1. In WorkBuddy, add a plugin source of type GitHub with `https://github.com/AlgernonYin/workbuddy-3P`.
    - In a mainland China cloud sandbox that cannot reach GitHub, use the maintainer mirror `https://cnb.cool/AlgernonYin/workbuddy-3P` (mirror, synchronized with GitHub `main`).
 2. Install the `custom-api-models` plugin.
-3. Configure a provider with either environment/plugin options or a JSON file.
+3. For cloud sessions, import an account-private profile as described below. Fixed hosts can use JSON files or environment variables. Plugin options require a host that can save and sync them.
 4. Start a new WorkBuddy session and select a routed official model name.
 
 ### Configure without a file
@@ -46,19 +46,21 @@ WB3P_API_KEY=<your-api-key>
 
 Plugin option names are `ENABLED`, `BASE_URL`, `API_KEY`, `PRESET`, and `ROUTES`. `WB3P_ROUTES` must be a JSON object.
 
-If neither `BASE_URL` nor `PRESET` is set, the plugin does no routing. There is no default preset. Without a resolvable API key, no model is routed and no official entry is hidden.
+If neither `BASE_URL` nor `PRESET` is set and there is no local config or private profile, the plugin does no routing. There is no default preset. Without a resolvable API key, no model is routed and no official entry is hidden.
 
 ### New sandboxes and keys
 
-The tested cloud web version has no working plugin-option save control; custom MCP saving also fails with `saveConfiguration` undefined. Use an **account-private skill package** to distribute the profile to fresh sandboxes:
+The tested cloud web version has no working plugin-option save control; custom MCP saving also fails with `saveConfiguration` undefined. The **account-private skill package** is the primary way to distribute the profile to fresh sandboxes:
 
 ```bash
 python scripts/make-private-profile.py --config /opt/workbuddy-3p/config.json --output /tmp/account-private-profile.zip --embed-keys
 ```
 
-Import the ZIP into your own personal skill assets. Never publish it to a marketplace, share its download URL, or commit it. It contains a credential-free `SKILL.md` and a private `workbuddy-3p.profile.json`. The upload preflight asks for credential confirmation. This is not an encrypted credential vault; authorized account and sandbox processes can read it.
+Import the ZIP into your own personal skill assets. Never publish it to a marketplace, share its download URL, or commit it. The package contains a credential-free `SKILL.md` and a private `workbuddy-3p.profile.json`; the profile contains configuration and, with `--embed-keys`, API keys. The upload preflight asks for credential confirmation. This is not an encrypted credential vault; authorized account and sandbox processes can read it.
 
-Only when local config and explicit provider environment options are absent, the plugin reads `<config-dir>/skills/*/workbuddy-3p.profile.json`. A fixed schema marker is required, and multiple packages cause an error. Confirm the source and routing with `models_status`. Re-upload the private package to change account defaults; the local switch affects only its sandbox.
+Only when local config and explicit provider environment options are absent, the plugin reads `<config-dir>/skills/*/workbuddy-3p.profile.json`. The profile must be adjacent to a `SKILL.md` whose YAML frontmatter contains `name: workbuddy-3p-profile`. Multiple packages cause an error. The profile schema marker catches misconfiguration only; it is not signature or identity authentication. Treat the installed skill and user directory as trusted content.
+
+Use `models_status` to confirm the configured mode and on-disk routing state. Re-uploading the private package changes the default for future sandboxes, but does not override an existing per-sandbox switch. The switch itself is per-sandbox, not account-global.
 
 ### Configure with a file
 
@@ -107,6 +109,10 @@ Invalid or unreadable JSON is an error; the script does not skip it and continue
 | 4 | `enabled` in the config file |
 | 5 | Built-in default: `third-party` |
 
+When a high-priority source in rows 1-3 selects `official`, it bypasses provider/profile config, even if damaged. Removal and restoration still require complete ownership state in `workbuddy-3p.state.json`. Invalid state, or a missing state alongside the 2.2.2 ownership marker, produces unknown status and refuses changes. Older orphaned entries without this marker cannot be identified automatically; restore a known-good backup instead of blindly deleting entries.
+
+Per-sandbox switches are not account-global. Changing `enabled` in a private profile changes the default for future sandboxes without a higher-priority local switch; it does not override an existing local switch.
+
 The accepted modes are `third-party` and `official`. Switch in any of these ways:
 
 - In a session, call the MCP tool `models_switch` with `{"mode":"official"}`, `{"mode":"third-party"}`, or `{"mode":"default"}`.
@@ -114,7 +120,7 @@ The accepted modes are `third-party` and `official`. Switch in any of these ways
 - Run `node scripts/sync-models.cjs --official`, `--third-party`, `--switch clear`, or `--status`.
 - `default` and `--switch clear` remove the per-sandbox switch file and follow the lower-priority sources.
 
-Switching to `official` removes plugin-written models and restores hidden official `availableModels` entries and replaced user models. Switching back to `third-party` routes them again. The change takes effect after WorkBuddy reloads `models.json`; if the menu does not change, start a new session.
+Switching to `official` removes plugin-written models and restores hidden official entries and replaced user models. Switching back to `third-party` routes them again. WorkBuddy must reload the file before new requests use it; routed menu labels can remain unchanged. `models_status` reports configured intent and disk state, not live traffic (`runtimeVerified: false`). If a running host does not reload, reopen that sandbox/session. A completely new sandbox follows account defaults, so set the desired switch there again.
 
 ## Configuration reference
 
@@ -136,7 +142,7 @@ Switching to `official` removes plugin-written models and restores hidden offici
 | Field | Behavior |
 | --- | --- |
 | `preset` | Optional built-in preset name, currently `bailian`. |
-| `baseUrl` | OpenAI-compatible base URL. HTTPS is required. HTTP is allowed only for `localhost`, `127.0.0.1`, or `::1`, or when the provider sets `allowInsecureHttp: true`. If the URL ends with `/chat/completions`, it is used as is; otherwise `/chat/completions` is appended. A preset can supply this value. |
+| `baseUrl` | OpenAI-compatible base URL. HTTPS is required. HTTP is allowed only for `localhost`, `127.0.0.1`, or `::1`, or when the provider sets `allowInsecureHttp: true`. A URL with userinfo, a query, or a fragment is rejected. If the URL ends with `/chat/completions`, it is used as is; otherwise `/chat/completions` is appended. A preset can supply this value. |
 | `allowInsecureHttp` | Optional boolean. Allows a non-local HTTP `baseUrl`; defaults to `false`. |
 | `label` | Label used in the generated custom model name: `<label> / <upstream-model>`. Defaults to the preset label, then the provider name. |
 | `apiKey` | Literal API key. Prefer an environment variable or file to avoid storing a secret in the config. |
@@ -213,7 +219,7 @@ The first non-empty value wins:
 6. `<config-dir>/workbuddy-3p.secrets/<provider-name>`
 7. For the default provider only: `WB3P_API_KEY_FILE`
 8. `providers.<name>.apiKeyUrl`, or `WB3P_API_KEY_URL` for the default provider
-9. A key this plugin previously wrote for the same provider name and the same normalized chat-completions URL. It never borrows another provider's key.
+9. A key from a previous sync for the same provider name and the same normalized chat-completions URL. It never borrows another provider's key.
 10. Missing. A route without a key is not activated and remains official.
 
 `apiKeyUrl` accepts HTTPS URLs only and expects a JSON response with an `apiKey` field. A non-HTTPS URL is an error. It should point to a private address. The URL fetch has an 8-second timeout.
@@ -259,7 +265,7 @@ Route mapping:
 | `minimax-m2.7` | `MiniMax/MiniMax-M2.7` |
 | `minimax-m2.5` | `MiniMax/MiniMax-M2.5` |
 
-`glm-5v-turbo` and `glm-5.3-flash` are listed as unsupported and stay official by default. You can route them to Bailian's `qwen3.8-max` and `qwen3.8-flash` if you accept those substitutions:
+`glm-5v-turbo` and `glm-5.3-flash` are listed as unsupported and stay official by default. The following manual mapping is an example only and is not a public default; use it only if you accept the substitutions:
 
 ```json
 {
@@ -300,21 +306,21 @@ node scripts/sync-models.cjs --quiet
 | --- | --- |
 | none | Apply the current config and write managed entries. |
 | `--dry-run` | Print the routing plan and write nothing. |
-| `--doctor` | Test the plan generated from the current config (not the last written file). It returns only HTTP status and elapsed time; response bodies are not returned. Keys are not printed. |
+| `--doctor` | Official mode returns skipped and sends no third-party requests; a high-priority official switch skips before damaged provider/profile config is loaded. Third-party mode sends one tiny request per planned model; those requests are billable and can consume quota. It returns only HTTP status and elapsed time, never response bodies or keys. |
 | `--official` / `--third-party` | Persist the per-sandbox switch and sync. |
 | `--switch clear` | Remove the per-sandbox switch and follow the lower-priority sources. |
-| `--status` | Show the resolved switch, its source, active state, and last error. |
-| `--uninstall` | Remove plugin-managed model entries and generated allowlist entries. User models are kept. The state file is deleted. |
+| `--status` | Report `configuredMode`, source, `modelsJsonActive`/`active` (on-disk entries), `runtimeVerified` (always `false`), and the last error. Provider endpoint reporting is limited to `host`. |
+| `--uninstall` | Remove entries recorded in ownership state and generated allowlist entries; keep other user models. Refuse invalid state or a missing state alongside the ownership marker. |
 | `--quiet` | Suppress normal JSON output. Errors still go to stderr, but the exit code is `0`. The `SessionStart` hook uses this mode. |
 
 The stdio MCP server provides:
 
 | Tool | Behavior |
 | --- | --- |
-| `models_status` | Show the current switch, its source, the last sync summary, and the last error. |
+| `models_status` | Report `configuredMode`, source, on-disk `modelsJsonActive`/`active`, `runtimeVerified` (always `false`), managed count, and the last error. Provider endpoint reporting is limited to `host`. |
 | `models_switch` | Set this sandbox to `official` or `third-party`, or use `default` to clear the switch. |
 | `models_resync` | Re-read the config and rewrite `models.json`. |
-| `models_doctor` | Test every model in the current config-generated plan and report HTTP status and elapsed time. |
+| `models_doctor` | Official mode skips with no third-party requests. Third-party mode sends one tiny billable request per planned model and reports HTTP status and elapsed time. |
 
 ### Sync summary
 
@@ -322,19 +328,22 @@ The stdio MCP server provides:
 | --- | --- |
 | `ok` | `true` only when there are no warnings. |
 | `partial` | Planning produced warnings but at least one model is still active. |
-| `active` | At least one third-party model is active. |
+| `active` | At least one third-party model is present in the current plan or on disk, depending on the command; this is not runtime verification. |
 | `switch` | Resolved mode: `official` or `third-party`. |
 | `switchFrom` | Source: `switch file`, `WB3P_ENABLED`, `plugin option ENABLED`, `config`, or `default`. |
 | `warnings` | Non-fatal issues, such as a missing provider key, a duplicate upstream model ID, or a replaced user model. |
 
-A normal sync also writes configuration failures to `~/.codebuddy/workbuddy-3p.last-error.json`; `models_status` exposes that error. Fail-closed errors include invalid JSON in `WB3P_CONFIG_JSON`, `ROUTES`, or a config file; an illegal `mode`; and `providers` that is not a non-empty object. On failure, `models.json` is not changed.
+`models_status` reports configuration and disk state, not traffic: `configuredMode` is resolved configuration intent, `modelsJsonActive`/`active` indicate third-party entries present in the on-disk `models.json`, and `runtimeVerified` is always `false` in 2.2.2. Do not claim that live traffic switched from this output.
+
+A normal sync also writes configuration failures to `~/.codebuddy/workbuddy-3p.last-error.json`; `models_status` exposes that error. Configuration validation failures reject the update and leave the last-good `models.json` unchanged; they do not automatically switch to official. Examples include invalid JSON in `WB3P_CONFIG_JSON`, `ROUTES`, or a config file; an illegal `mode`; and `providers` that is not a non-empty object. A high-priority official switch can bypass damaged config as described above, but still requires complete ownership state.
 
 ## Security
 
 - Never commit API keys or put them at a public URL.
 - Protect `models.json`, `workbuddy-3p.json`, secret files, and backups with `chmod 600` where the platform supports POSIX modes. The sync script writes `models.json` with mode `600`; atomic writes for state, switch, and last-error files also request mode `600`.
-- `baseUrl` must use HTTPS. HTTP is allowed only for `localhost`, `127.0.0.1`, or `::1`, or with `allowInsecureHttp: true`.
+- `baseUrl` must use HTTPS. HTTP is allowed only for `localhost`, `127.0.0.1`, or `::1`, or with `allowInsecureHttp: true`. The URL must not contain userinfo, a query, or a fragment.
 - `apiKeyUrl` must use HTTPS. The code cannot tell whether an address is private, so keep that URL on a private, controlled host.
+- `models_status` and public sync summaries never return the full `baseUrl`; where an endpoint is reported, only `host` is included.
 - When an official model is routed, prompts and responses go to the configured third-party API.
 - The WorkBuddy menu can still show the official model name for a routed slot. The selected request goes to the third-party provider.
 - Third-party API usage and billing are your responsibility.
@@ -347,7 +356,9 @@ A normal sync also writes configuration failures to `~/.codebuddy/workbuddy-3p.l
 - In `same-name` mode, routing an official ID to an upstream model that does not exist causes an upstream error. Run `--doctor` against the current config plan.
 - One upstream model ID can belong to only one provider, regardless of URL. A conflicting route or extra model is skipped with a warning; the skipped official alias remains available as an official model unless another route handles it.
 - Cloud sandboxes observed in 2026-09 (mainland China region) could not reach `github.com` (TLS reset), so a GitHub source can be accepted by the account API but the sandbox fails to `git clone` it. Use the maintainer mirror `https://cnb.cool/AlgernonYin/workbuddy-3P` (synchronized with GitHub `main`) when GitHub is unreachable.
-- New sessions may run in a fresh sandbox. Prefer the plugin option `API_KEY` when your platform syncs plugin options to new sandboxes and confirm it with `models_status`; otherwise use a private `apiKeyUrl` reachable from every sandbox. Do not rely on an environment variable or file that exists only in an old sandbox.
+- New sessions may run in a fresh sandbox. The tested cloud options UI cannot save plugin options, and custom MCP saving fails; use the account-private skill package as the primary setup path. It is not an encrypted vault: `SKILL.md` has no key, while `workbuddy-3p.profile.json` can contain profile configuration and embedded keys. Treat the installed skill and user directory as trusted.
+
+- `models_status` cannot prove live traffic. `runtimeVerified` is always `false` in 2.2.2; use actual requests or host behavior when live routing must be verified.
 
 ## Uninstall and rollback
 
@@ -363,7 +374,7 @@ or restore the first pre-change backup:
 ~/.codebuddy/models.json.bak-workbuddy-3p
 ```
 
-`--uninstall` removes only entries recorded in `workbuddy-3p.state.json`; user models remain. If the state file is missing, restore the backup or remove the generated entries manually.
+`--uninstall` removes only entries recorded in `workbuddy-3p.state.json`; other user models remain. Invalid state or a missing state alongside the 2.2.2 marker is refused. Older unmarked orphaned entries cannot be identified automatically. Restore a known-good backup instead of blindly deleting entries.
 
 ## Tests
 

@@ -1,4 +1,4 @@
 ---
-description: Show whether WorkBuddy models use the official backend or the third-party API (custom-api-models)
+description: Show the configured and on-disk WorkBuddy model routing state (custom-api-models)
 ---
-Call the MCP tool `models_status` of the `custom-api-models` server and summarise: current source (official / third-party), where the switch comes from, number of routed models, and the last error if any. Never print API keys.
+Call the MCP tool `models_status` of the `custom-api-models` server and summarise `configuredMode`, `switchFrom`, `modelsJsonActive`/`active`, `managedModels`, `runtimeVerified`, and `lastError`. Explain that `configuredMode` is configuration intent and the active/model fields are on-disk state only, so they do not prove live traffic switched; `runtimeVerified` is always false in 2.2.2. If a provider endpoint is shown, report only `host`. Never print API keys or full base URLs.

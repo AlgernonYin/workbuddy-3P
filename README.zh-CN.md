@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-**版本：** 2.2.1
+**版本：** 2.2.2
 
 WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkBuddy / CodeBuddy Code。它让模型选择使用你自己的 OpenAI 兼容 API。网页端和手机端共用同一套云沙箱机制，因此不需要修改网页或客户端。
 
@@ -10,7 +10,7 @@ WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkB
 
 ## 原理
 
-- `SessionStart` hook 和 stdio MCP server 启动时都会运行 `sync-models.cjs`。并发同步会用 `~/.codebuddy/workbuddy-3p.lock` 串行化。已有 `models.json` 保留 inode 原位写入，以兼容宿主的文件监视器；状态文件原子替换。
+- `SessionStart` hook 和 stdio MCP server 启动时都会运行 `sync-models.cjs`。同步、切换和卸载操作会用 `~/.codebuddy/workbuddy-3p.lock` 串行化。已有 `models.json` 保留 inode 原位写入，以兼容宿主的文件监视器；状态文件原子替换。普通写失败会回滚，但这不是跨文件 crash-atomic 事务，原位更新期间宿主仍可能看到短暂的读取窗口。
 - 同步脚本写入 `~/.codebuddy/models.json`，权限为 `600`。
 - 每条第三方模型以目标上游模型 ID 作为自定义模型 ID，`aliases` 中保存需要解析到它的 WorkBuddy 官方 ID。WorkBuddy 将这些自定义槽位显示为 `custom-local:<model-id>`。
 - `availableModels` 只隐藏实际被路由的官方 ID；上游模型 ID 不会仅因为它是自定义模型 ID 而被隐藏。如果用户原有 allowlist 含被路由的官方 ID，插件会暂时移除，卸载或切回官方时恢复。
@@ -23,7 +23,7 @@ WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkB
 1. 在 WorkBuddy 中添加插件来源，类型选 GitHub，地址填 `https://github.com/AlgernonYin/workbuddy-3P`。
    - 中国大陆云沙箱无法访问 GitHub 时，使用维护者镜像 `https://cnb.cool/AlgernonYin/workbuddy-3P`（镜像，内容与 GitHub `main` 同步）。
 2. 安装 `custom-api-models` 插件。
-3. 用环境变量/插件选项或 JSON 文件配置 provider。
+3. 云端会话使用下文的账号私有配置包；固定宿主可用 JSON 文件或环境变量。插件选项仅适用于能保存并同步它们的宿主。
 4. 新建 WorkBuddy 会话，在菜单中选择已路由的官方模型名称。
 
 ### 零配置文件
@@ -46,19 +46,21 @@ WB3P_API_KEY=<your-api-key>
 
 插件选项名称为 `ENABLED`、`BASE_URL`、`API_KEY`、`PRESET` 和 `ROUTES`。`WB3P_ROUTES` 必须是 JSON 对象。
 
-既没有 `BASE_URL` 也没有 `PRESET` 时，插件不做任何路由，也没有默认 preset。没有可解析的 API key 时，不会添加路由模型，也不会隐藏官方条目。
+没有设置 `BASE_URL`、`PRESET`，且没有本地配置或私有 profile 时，插件不做任何路由，也没有默认 preset。没有可解析的 API key 时，不会添加路由模型，也不会隐藏官方条目。
 
 ### 新沙箱与密钥
 
-云端网页在当前实测版本没有可用的插件选项保存入口；自定义 MCP 保存也会报 `saveConfiguration` 未定义。推荐将配置打成**个人私有技能包**，通过 WorkBuddy 的个人技能上传入口同步到新沙箱：
+云端网页在当前实测版本没有可用的插件选项保存入口；自定义 MCP 保存也会报 `saveConfiguration` 未定义。新沙箱应以**账号私有技能包**为主方案，通过 WorkBuddy 的个人技能上传入口同步：
 
 ```bash
 python scripts/make-private-profile.py --config /opt/workbuddy-3p/config.json --output /tmp/account-private-profile.zip --embed-keys
 ```
 
-上传得到的 ZIP 至自己的个人技能资产，切勿发布到技能市场、分享下载链接或提交 Git。这个包含 `SKILL.md`（无密钥）和 `workbuddy-3p.profile.json`（含私密配置）；平台上传预检会要求确认凭据风险。它不是加密的密钥保险库，账号和沙箱内有权限的进程可以读取。
+上传得到的 ZIP 至自己的个人技能资产，切勿发布到技能市场、分享下载链接或提交 Git。这个包含无密钥的 `SKILL.md` 和私密的 `workbuddy-3p.profile.json`；profile 含配置，并在使用 `--embed-keys` 时含 API key。平台上传预检会要求确认凭据风险。它不是加密的密钥保险库，账号和沙箱内有权限的进程可以读取。
 
-插件只在本机配置和显式环境变量都未设置时，读取 `<config-dir>/skills/*/workbuddy-3p.profile.json`。文件必须带固定格式标记；多个配置包会报错以避免选错账户。用 `models_status` 确认实际读取路径和路由状态。更新配置需要重新上传私有包；沙箱本地开关只影响该沙箱。
+插件只在本机配置和显式环境变量都未设置时，读取 `<config-dir>/skills/*/workbuddy-3p.profile.json`。profile 必须与 `SKILL.md` 位于同一技能目录，且其 YAML frontmatter 含 `name: workbuddy-3p-profile`；多个配置包会报错。schema 标记只用于防误配置，不是签名或身份认证。已安装技能和用户目录必须可信。
+
+用 `models_status` 确认 `configuredMode` 和磁盘路由状态。重新上传私有包会改变未来沙箱的默认值，但不会覆盖已有本地开关；开关本身只作用于当前沙箱，不是账号全局。
 
 ### 使用配置文件
 
@@ -107,6 +109,10 @@ JSON 损坏或文件不可读时会报错，不会跳过该来源继续查找。
 | 4 | 配置文件中的 `enabled` |
 | 5 | 内置默认值：`third-party` |
 
+第 1-3 行的高优先级来源选择 `official` 时，会绕过 provider/profile 配置，即使配置损坏也可使用；但移除/恢复插件条目仍依赖 `workbuddy-3p.state.json` 中的完整归属记录。state 损坏，或存在 2.2.2 归属标记但 state 丢失时，状态报 unknown 并拒绝改动。旧版没有标记的遗留条目无法自动识别；应恢复已知良好的备份，不要盲删。
+
+开关是 per-sandbox，不跨账号全局。修改私有 profile 的 `enabled` 只改变尚无更高优先级本地开关的未来沙箱默认行为，不会强制覆盖已有本地开关。
+
 开关取值为 `third-party` 和 `official`。切换方式：
 
 - 在会话中调用 MCP 工具 `models_switch`，参数为 `{"mode":"official"}`、`{"mode":"third-party"}` 或 `{"mode":"default"}`。
@@ -114,7 +120,7 @@ JSON 损坏或文件不可读时会报错，不会跳过该来源继续查找。
 - 运行 `node scripts/sync-models.cjs --official`、`--third-party`、`--switch clear` 或 `--status`。
 - `default` 和 `--switch clear` 会删除当前沙箱的开关文件，并回到较低优先级的来源。
 
-切到 `official` 会移除插件写入的模型，恢复被隐藏的官方 `availableModels` 条目和被替换的用户模型；再切回 `third-party` 会重新路由。WorkBuddy 重新加载 `models.json` 后生效；菜单未变化时，新建会话。
+切到 `official` 会移除插件写入的模型，恢复被隐藏的官方条目和被替换的用户模型；再切回 `third-party` 会重新路由。WorkBuddy 重新加载文件后，新请求才会采用这些路由，菜单名称可能不变。`models_status` 只报告配置意图和磁盘状态，不证明实际流量（`runtimeVerified: false`）。宿主未重新加载时，重新打开同一沙箱/会话；全新沙箱会采用账号默认值，需要再次设置所需开关。
 
 ## 配置参考
 
@@ -136,7 +142,7 @@ JSON 损坏或文件不可读时会报错，不会跳过该来源继续查找。
 | 字段 | 行为 |
 | --- | --- |
 | `preset` | 可选内置 preset 名称，目前为 `bailian`。 |
-| `baseUrl` | OpenAI 兼容 base URL。必须使用 HTTPS；仅 `localhost`、`127.0.0.1`、`::1` 或 provider 设置 `allowInsecureHttp: true` 时允许 HTTP。已经以 `/chat/completions` 结尾时直接使用，否则追加 `/chat/completions`。preset 也可以提供该值。 |
+| `baseUrl` | OpenAI 兼容 base URL。必须使用 HTTPS；仅 `localhost`、`127.0.0.1`、`::1` 或 provider 设置 `allowInsecureHttp: true` 时允许 HTTP。URL 含 userinfo、query 或 fragment 会报错。已经以 `/chat/completions` 结尾时直接使用，否则追加 `/chat/completions`。preset 也可以提供该值。 |
 | `allowInsecureHttp` | 可选布尔值，允许非本机 HTTP `baseUrl`；默认 `false`。 |
 | `label` | 生成的自定义模型显示名前缀：`<label> / <upstream-model>`。默认依次使用 preset 的 label、provider 名称。 |
 | `apiKey` | 直接写入的 API key。为避免配置中保存密钥，优先使用环境变量或文件。 |
@@ -213,7 +219,7 @@ provider 形式的写法应使用已配置的 provider 名称。显式路由优�
 6. `<config-dir>/workbuddy-3p.secrets/<provider-name>`
 7. 仅默认 provider：`WB3P_API_KEY_FILE`
 8. `providers.<name>.apiKeyUrl`；默认 provider 还可使用 `WB3P_API_KEY_URL`
-9. 本插件上次为同名 provider 且同一规范化 chat-completions URL 写入的 key。不会跨 provider 借用 key。
+9. 上一次同步为同名 provider 且同一规范化 chat-completions URL 保存的 key。不会跨 provider 借用 key。
 10. 未找到。没有 key 的路由不会启用，对应模型继续使用官方后端。
 
 `apiKeyUrl` 只接受 HTTPS，并要求响应 JSON 中存在 `apiKey` 字段。非 HTTPS 地址会报错。它应指向私有地址。URL 请求超时为 8 秒。
@@ -259,7 +265,7 @@ https://dashscope.aliyuncs.com/compatible-mode/v1
 | `minimax-m2.7` | `MiniMax/MiniMax-M2.7` |
 | `minimax-m2.5` | `MiniMax/MiniMax-M2.5` |
 
-`glm-5v-turbo` 和 `glm-5.3-flash` 被列为不支持的模型，默认保留官方后端。如果接受模型替换，可以手动路由到百炼的 `qwen3.8-max` 和 `qwen3.8-flash`：
+`glm-5v-turbo` 和 `glm-5.3-flash` 被列为不支持的模型，默认保留官方后端。下面的手动映射只是示例，不设为公共默认；只有接受模型替换时才使用：
 
 ```json
 {
@@ -300,21 +306,21 @@ node scripts/sync-models.cjs --quiet
 | --- | --- |
 | 无 | 应用当前配置并写入管理条目。 |
 | `--dry-run` | 输出路由计划，不写文件。 |
-| `--doctor` | 测试当前配置生成的计划（不是上次写入的文件），只返回 HTTP 状态和耗时，不返回上游响应体。不会输出 key。 |
+| `--doctor` | `official` 模式直接跳过，不会请求第三方；高优先级 `official` 开关甚至不会加载损坏的 provider/profile 配置。`third-party` 模式会对计划中的每个模型发送一次小额计费测试请求，可能消耗额度。只返回 HTTP 状态和耗时，不返回响应体或 key。 |
 | `--official` / `--third-party` | 为当前沙箱写入开关文件并同步。 |
 | `--switch clear` | 删除当前沙箱的开关文件，并回到较低优先级的来源。 |
-| `--status` | 显示解析后的开关、来源、激活状态和最近错误。 |
-| `--uninstall` | 删除插件管理的模型条目和生成的 allowlist 条目，保留用户模型，并删除状态文件。 |
+| `--status` | 返回 `configuredMode`、来源、`modelsJsonActive`/`active`（磁盘条目）、`runtimeVerified`（恒为 `false`）和最近错误；provider endpoint 只报告 `host`。 |
+| `--uninstall` | 删除归属记录和生成的 allowlist 条目，保留其它用户模型。state 损坏，或存在归属标记但 state 丢失时拒绝改动。 |
 | `--quiet` | 不输出正常 JSON。错误仍写入 stderr，但退出码为 `0`。`SessionStart` hook 使用该模式。 |
 
 stdio MCP server 提供：
 
 | 工具 | 行为 |
 | --- | --- |
-| `models_status` | 显示当前开关、来源、最近一次同步摘要和最近错误。 |
+| `models_status` | 返回 `configuredMode`、来源、磁盘 `modelsJsonActive`/`active`、`runtimeVerified`（恒为 `false`）、管理条目数和最近错误；provider endpoint 只报告 `host`。 |
 | `models_switch` | 将当前沙箱切到 `official` 或 `third-party`，或用 `default` 清除开关。 |
 | `models_resync` | 重新读取配置并改写 `models.json`。 |
-| `models_doctor` | 测试当前配置生成的计划中的每个模型，并报告 HTTP 状态和耗时。 |
+| `models_doctor` | `official` 模式跳过且不请求第三方；`third-party` 模式对计划中的每个模型发送一次小额计费请求，并报告 HTTP 状态和耗时。 |
 
 ### 同步摘要
 
@@ -322,19 +328,22 @@ stdio MCP server 提供：
 | --- | --- |
 | `ok` | 只有没有 warning 时才为 `true`。 |
 | `partial` | 规划阶段出现 warning，但仍有至少一个模型激活。 |
-| `active` | 至少有一个第三方模型激活。 |
+| `active` | 当前计划或磁盘中至少有一个第三方模型条目（取决于命令）；不代表真实流量已验证。 |
 | `switch` | 解析后的模式：`official` 或 `third-party`。 |
 | `switchFrom` | 来源：`switch file`、`WB3P_ENABLED`、`plugin option ENABLED`、`config` 或 `default`。 |
 | `warnings` | 非致命问题，例如 provider 缺 key、上游模型 ID 冲突或用户模型被替换。 |
 
-正常同步还会把配置错误写入 `~/.codebuddy/workbuddy-3p.last-error.json`，`models_status` 可见该错误。fail closed 的典型情况包括：`WB3P_CONFIG_JSON`、`ROUTES` 或配置文件 JSON 损坏，`mode` 非法，`providers` 不是非空对象；失败时不改动 `models.json`。
+`models_status` 只报告配置和磁盘状态：`configuredMode` 是配置意图，`modelsJsonActive`/`active` 是磁盘 `models.json` 中的第三方条目，`runtimeVerified` 在 2.2.2 中恒为 `false`。不能凭此声称真实流量已切换。
+
+正常同步还会把配置错误写入 `~/.codebuddy/workbuddy-3p.last-error.json`，`models_status` 可见该错误。配置校验失败会拒绝本次更新并保留 last-good `models.json`，不会自动切到 `official`。典型情况包括：`WB3P_CONFIG_JSON`、`ROUTES` 或配置文件 JSON 损坏，`mode` 非法，`providers` 不是非空对象。高优先级 `official` 开关可按上文绕过损坏配置，但仍依赖完整 ownership state。
 
 ## 安全
 
 - 不要把 API key 提交到仓库，也不要把它放在公开 URL。
 - 在支持 POSIX 权限的平台上，对 `models.json`、`workbuddy-3p.json`、密钥文件和备份执行 `chmod 600`。同步脚本会以 `600` 写入 `models.json`；state、switch 和 last-error 文件的原子写入也请求 `600`。
-- `baseUrl` 必须使用 HTTPS。仅 `localhost`、`127.0.0.1`、`::1` 或 `allowInsecureHttp: true` 时允许 HTTP。
+- `baseUrl` 必须使用 HTTPS。仅 `localhost`、`127.0.0.1`、`::1` 或 `allowInsecureHttp: true` 时允许 HTTP。URL 不得含 userinfo、query 或 fragment。
 - `apiKeyUrl` 必须使用 HTTPS。代码无法判断地址是否私有，所以应把它放在自己控制的私有主机上。
+- `models_status` 和公开同步摘要不会返回完整 `baseUrl`；需要报告 endpoint 时只返回 `host`。
 - 官方模型完成路由后，提示词和响应会发往配置的第三方 API。
 - 已路由槽位在 WorkBuddy 菜单中仍可能显示官方模型名，实际请求发往第三方 provider。
 - 第三方 API 的使用和计费由你承担。
@@ -347,7 +356,9 @@ stdio MCP server 提供：
 - 在 `same-name` 模式下，如果路由到上游不存在的同名模型，会返回上游错误。可对当前配置生成的计划运行 `--doctor`。
 - 同一上游模型 ID 只能属于一个 provider，与 URL 是否相同无关。冲突的路由或额外模型会被跳过并输出 warning；被跳过的官方 alias 会继续作为官方模型可选，除非另有路由处理它。
 - 2026-09 实测的云沙箱（中国大陆区域）无法访问 `github.com`（TLS 被重置）：账号接口能添加 GitHub 来源，但沙箱内 `git clone` 会失败。GitHub 不可访问时使用维护者镜像 `https://cnb.cool/AlgernonYin/workbuddy-3P`（与 GitHub `main` 同步）。
-- 新会话可能运行在全新的沙箱。平台会把插件选项同步到新沙箱时，优先使用插件选项 `API_KEY`，并用 `models_status` 确认；否则使用每个沙箱都能访问的私有 `apiKeyUrl`。不要依赖只存在于旧沙箱的环境变量或文件。
+- 新会话可能运行在全新的沙箱。实测云端网页无法保存插件选项，自定义 MCP 保存也会失败；应以账号私有技能包为主方案。它不是加密保险库：`SKILL.md` 无 key，`workbuddy-3p.profile.json` 可能含配置和嵌入 key。已安装技能和用户目录必须可信。
+
+- `models_status` 不能证明真实流量；`runtimeVerified` 在 2.2.2 中恒为 `false`。需要确认实际路由时，应做真实请求或观察宿主行为。
 
 ## 卸载与回滚
 
@@ -363,7 +374,7 @@ node scripts/sync-models.cjs --uninstall
 ~/.codebuddy/models.json.bak-workbuddy-3p
 ```
 
-`--uninstall` 只删除 `workbuddy-3p.state.json` 中记录的条目，用户模型会保留。如果状态文件已经丢失，请恢复备份或手动删除生成的条目。
+`--uninstall` 只删除 `workbuddy-3p.state.json` 中记录的条目，其它用户模型会保留。state 损坏，或存在 2.2.2 归属标记但 state 丢失时拒绝改动。旧版没有标记的遗留条目无法自动识别；请恢复已知良好的备份，不要盲删。
 
 ## 测试
 

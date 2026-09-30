@@ -10,6 +10,7 @@ function fixture(t) {
   for(const k of Object.keys(env)) if(/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)) delete env[k];
   function put(folder,value) {
     fs.mkdirSync(path.join(dir,'skills',folder),{recursive:true});
+    fs.writeFileSync(path.join(dir,'skills',folder,'SKILL.md'),'---\nname: workbuddy-3p-profile\n---\n');
     fs.writeFileSync(path.join(dir,'skills',folder,'workbuddy-3p.profile.json'),typeof value==='string'?value:JSON.stringify(value));
   }
   const config={mode:'explicit',providers:{p:{baseUrl:'https://test.invalid/v1',apiKey:'fake-profile-secret'}},routes:{'glm-5.3':'foo'}};
@@ -39,5 +40,14 @@ test('repeated switches preserve models inode for CodeBuddy fs.watch',t=>{
     const r=f.run(mode);assert.equal(r.status,0,r.stderr);
     assert.equal(fs.statSync(target).ino,inode,'rename would detach the host watcher');
     JSON.parse(fs.readFileSync(target));
+  }
+});
+
+test('profile requires its skill name in YAML front matter, not body text',t=>{
+  const f=fixture(t); f.put('a',f.profile);
+  for(const skill of ['---\nname: other-skill\n---\nname: workbuddy-3p-profile\n','plain body\nname: workbuddy-3p-profile\n']) {
+    fs.writeFileSync(path.join(f.dir,'skills','a','SKILL.md'),skill);
+    const r=f.run();assert.notEqual(r.status,0);assert.match(r.stderr,/must belong/);
+    assert.equal(fs.existsSync(path.join(f.dir,'models.json')),false);
   }
 });

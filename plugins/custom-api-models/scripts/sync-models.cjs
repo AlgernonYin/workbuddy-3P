@@ -32,14 +32,15 @@ const readText = (p) => { try { return fs.readFileSync(p, "utf8").trim(); } catc
 function writeAtomic(p, text) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(tmp, text, { mode: 0o600 });
-  fs.renameSync(tmp, p);
+  try {
+    fs.writeFileSync(tmp, text, { mode: 0o600 });
+    fs.renameSync(tmp, p);
+  } finally { try { fs.unlinkSync(tmp); } catch {} }
   try { fs.chmodSync(p, 0o600); } catch {}
 }
 
 // ---------- cross-process lock (SessionStart hook and MCP server start together) ----------
-function sleepMs(ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
-function withLock(dir, fn) {
+async function withLock(dir, fn) {
   const lock = paths(dir).lock;
   fs.mkdirSync(dir, { recursive: true });
   const deadline = Date.now() + 15000;
@@ -47,9 +48,16 @@ function withLock(dir, fn) {
     try { fs.writeFileSync(lock, String(process.pid), { flag: "wx", mode: 0o600 }); break; }
     catch (e) {
       if (e.code !== "EEXIST") throw e;
-      try { if (Date.now() - fs.statSync(lock).mtimeMs > 30000) { fs.unlinkSync(lock); continue; } } catch {}
+      // A slow credential URL is not evidence that its owning process died.
+      try {
+        const pid = Number(fs.readFileSync(lock, "utf8"));
+        if (Number.isInteger(pid) && pid > 0) {
+          try { process.kill(pid, 0); }
+          catch (err) { if (err.code === "ESRCH") { fs.unlinkSync(lock); continue; } }
+        }
+      } catch {}
       if (Date.now() > deadline) throw new Error(`lock busy: ${lock}`);
-      sleepMs(100);
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
   const release = () => { try { fs.unlinkSync(lock); } catch {} };
@@ -77,11 +85,22 @@ function resolveSwitch(dir, cfg) {
   if (cfg && cfg.enabled !== undefined) return { mode: parseSwitch(cfg.enabled, "config.enabled"), from: "config" };
   return { mode: "third-party", from: "default" };
 }
-function setSwitch(mode) {
+async function setSwitch(mode) {
   const m = parseSwitch(mode, "switch");
   const p = paths();
-  if (!m) { try { fs.unlinkSync(p.switch); } catch {} } else writeAtomic(p.switch, m + "\n");
-  return sync();
+  return withLock(p.dir, async () => {
+    const previous = fs.existsSync(p.switch) ? fs.readFileSync(p.switch, "utf8") : null;
+    try {
+      if (!m) fs.rmSync(p.switch, { force: true }); else writeAtomic(p.switch, m + "\n");
+      const result = await syncUnlocked({}, p);
+      fs.rmSync(p.lastError, { force: true });
+      return result;
+    } catch (e) {
+      if (previous === null) fs.rmSync(p.switch, { force: true }); else writeAtomic(p.switch, previous);
+      recordError(p, e);
+      throw e;
+    }
+  });
 }
 
 // ---------- config discovery ----------
@@ -106,6 +125,10 @@ function cloudProfile(dir) {
   }
   if (found.length > 1) fail("multiple cloud profiles found; keep one private workbuddy-3p profile");
   if (!found.length) return null;
+  const skill = readText(path.join(path.dirname(found[0]), "SKILL.md"));
+  const frontMatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!frontMatter || !/^name:[ \t]*workbuddy-3p-profile[ \t]*\r?$/m.test(frontMatter[1]))
+    fail("cloud profile must belong to the workbuddy-3p-profile skill");
   const profile = readJsonStrict(found[0], "cloud profile");
   if (!isObj(profile) || profile.kind !== "workbuddy-3p-private-profile" || profile.version !== 1 || !isObj(profile.config))
     fail("invalid cloud profile schema");
@@ -117,10 +140,14 @@ function loadConfig(dir) {
     catch { fail("WB3P_CONFIG_JSON is not valid JSON"); }
   }
   if (ENV.WB3P_CONFIG && !fs.existsSync(ENV.WB3P_CONFIG)) fail(`WB3P_CONFIG points to a missing file: ${ENV.WB3P_CONFIG}`);
-  for (const p of configCandidates(dir)) { const j = readJsonStrict(p, "config"); if (j !== null) return { cfg: j, from: p }; }
+  for (const p of configCandidates(dir)) {
+    const j = readJsonStrict(p, "config");
+    if (j !== null || fs.existsSync(p)) return { cfg: j, from: p };
+  }
   // Zero-file setup. No provider is guessed: either BASE_URL or PRESET must be given explicitly.
   const baseUrl = ENV.WB3P_BASE_URL || opt("BASE_URL");
   const preset = ENV.WB3P_PRESET || opt("PRESET");
+  if (preset && !/^[\w.-]+$/.test(preset)) fail("bad preset name");
   if (!baseUrl && !preset) return cloudProfile(dir) || { cfg: null, from: "none" };
   const name = preset || "custom";
   const cfg = { providers: { [name]: { preset: preset || undefined, baseUrl: baseUrl || undefined } }, default: name };
@@ -136,8 +163,11 @@ function validateConfig(cfg) {
   if (!isObj(cfg.providers) || !Object.keys(cfg.providers).length) fail("config.providers must be a non-empty object");
   for (const [n, p] of Object.entries(cfg.providers)) {
     if (!isObj(p)) fail(`provider ${n} must be an object`);
-    if (n.includes(":")) fail(`provider name ${n} must not contain ':'`);
-    for (const k of ["extraModels"]) if (p[k] !== undefined && !Array.isArray(p[k])) fail(`provider ${n}.${k} must be an array`);
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(n)) fail("provider names must use letters, digits, dots, underscores or hyphens");
+    for (const k of ["baseUrl", "label", "preset", "apiKey", "apiKeyEnv", "apiKeyFile", "apiKeyUrl"])
+      if (p[k] !== undefined && typeof p[k] !== "string") fail(`provider ${n}.${k} must be a string`);
+    if (p.extraModels !== undefined && !(Array.isArray(p.extraModels) && p.extraModels.every(x => typeof x === "string" && x.trim())))
+      fail(`provider ${n}.extraModels must be an array of non-empty strings`);
     for (const k of ["models", "defaults"]) if (p[k] !== undefined && !isObj(p[k])) fail(`provider ${n}.${k} must be an object`);
   }
   if (cfg.default !== undefined && !cfg.providers[cfg.default]) fail(`default provider ${cfg.default} is not configured`);
@@ -165,7 +195,7 @@ function keyFromFile(p) {
 }
 async function keyFromUrl(url) {
   if (!url) return "";
-  if (!/^https:\/\//i.test(url)) fail(`apiKeyUrl must use https: ${url}`);
+  if (!/^https:\/\//i.test(url)) fail("apiKeyUrl must use https");
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(8000), cache: "no-store" });
     if (r.ok) { const j = await r.json(); return j && j.apiKey ? String(j.apiKey).trim() : ""; }
@@ -195,6 +225,7 @@ async function resolveKey(name, p, isDefault, dir, previous) {
 function chatUrl(base, provider, allowHttp) {
   let u;
   try { u = new URL(String(base)); } catch { fail(`provider ${provider}: invalid baseUrl`); }
+  if (u.username || u.password || u.search || u.hash) fail(`provider ${provider}: baseUrl must not include credentials, query or fragment`);
   const local = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(u.hostname);
   if (u.protocol !== "https:" && !(u.protocol === "http:" && (local || allowHttp)))
     fail(`provider ${provider}: baseUrl must use https (http is only allowed for localhost or with allowInsecureHttp)`);
@@ -208,13 +239,18 @@ function parseTarget(t, cfg, officialId, warnings) {
   if (t === "official" || t === false || t === null) return null;
   if (t === true || t === "") return { provider: cfg.default, model: officialId };
   if (isObj(t)) {
+    if (t.provider !== undefined && (typeof t.provider !== "string" || !t.provider.trim())) fail(`route ${officialId}: provider must be a non-empty string`);
+    if (t.model !== undefined && (typeof t.model !== "string" || !t.model.trim())) fail(`route ${officialId}: model must be a non-empty string`);
     const provider = t.provider || cfg.default;
     if (!cfg.providers[provider]) fail(`route ${officialId}: unknown provider ${provider}`);
     return { provider, model: t.model || officialId };
   }
   if (typeof t !== "string") fail(`route ${officialId}: invalid target`);
   const i = t.indexOf(":");
-  if (i > 0 && cfg.providers[t.slice(0, i)]) return { provider: t.slice(0, i), model: t.slice(i + 1) };
+  if (i > 0 && cfg.providers[t.slice(0, i)]) {
+    if (!t.slice(i + 1).trim()) fail(`route ${officialId}: model must not be empty`);
+    return { provider: t.slice(0, i), model: t.slice(i + 1) };
+  }
   if (cfg.providers[t]) return { provider: t, model: officialId };
   if (i > 0 && /^[A-Za-z][\w.-]*$/.test(t.slice(0, i)) && !t.slice(0, i).includes("/"))
     warnings.push(`route ${officialId}: "${t.slice(0, i)}" is not a configured provider; sending "${t}" as a model id to ${cfg.default}. Use {"provider":..,"model":..} to be explicit.`);
@@ -288,7 +324,7 @@ async function buildPlan(cfg, dir, prev) {
 
 function publicSummary(plan) {
   return {
-    providers: Object.values(plan.providers).map(p => ({ name: p.name, url: p.url, key: p.source })),
+    providers: Object.values(plan.providers).map(p => ({ name: p.name, host: new URL(p.url).host, key: p.source })),
     routed: Object.fromEntries(Object.entries(plan.routed).map(([k, v]) => [k, v.label])),
     extra: plan.extra, keptOfficial: plan.keep.length, warnings: plan.warnings,
   };
@@ -296,7 +332,14 @@ function publicSummary(plan) {
 
 // ---------- apply ----------
 function readState(p) {
-  const s = readJsonLoose(p.state) || {};
+  const s = readJsonStrict(p.state, "ownership state");
+  if (s === null && !fs.existsSync(p.state)) return { managed: [], allow: [], hidden: [], displaced: [], providers: {}, missing: true };
+  const strings = x => Array.isArray(x) && x.every(v => typeof v === "string");
+  if (!isObj(s) || !strings(s.managed) || !strings(s.allow) || !strings(s.hidden) ||
+      !Array.isArray(s.displaced) || !s.displaced.every(m => isObj(m) && typeof m.id === "string") ||
+      !isObj(s.providers) || !Object.values(s.providers).every(v => isObj(v) && typeof v.url === "string" && strings(v.modelIds)) ||
+      (s.hadAllowlist !== undefined && typeof s.hadAllowlist !== "boolean"))
+    fail("invalid ownership state; restore a backup before changing routing");
   return { managed: s.managed || [], allow: s.allow || [], hidden: s.hidden || [], displaced: s.displaced || [], providers: s.providers || {}, hadAllowlist: s.hadAllowlist };
 }
 function prevKeys(cur, state) {
@@ -312,6 +355,7 @@ function prevKeys(cur, state) {
 function stripManaged(cur, state) {
   const managed = new Set(state.managed), allow = new Set(state.allow);
   const out = { ...cur, models: (cur.models || []).filter(m => !(m && managed.has(m.id))) };
+  delete out.workbuddy3pManaged;
   for (const m of state.displaced) if (!out.models.some(x => x && x.id === m.id)) out.models.push(m);
   if (Array.isArray(cur.availableModels) || state.hidden.length) {
     const list = (cur.availableModels || []).filter(x => !allow.has(x));
@@ -345,25 +389,67 @@ function writeModels(p, before, text) {
   return true;
 }
 
+function parseModels(text) {
+  if (text === null) return {};
+  let cur;
+  try { cur = JSON.parse(text); } catch { fail("models.json is not valid JSON"); }
+  if (!isObj(cur) || (cur.models !== undefined && (!Array.isArray(cur.models) || !cur.models.every(m => isObj(m) && typeof m.id === "string"))) ||
+      (cur.availableModels !== undefined && (!Array.isArray(cur.availableModels) || !cur.availableModels.every(x => typeof x === "string"))))
+    fail("invalid models.json schema");
+  return cur;
+}
+function checkOwnership(cur, state) {
+  if (cur.workbuddy3pManaged) {
+    const marker = cur.workbuddy3pManaged;
+    if (state.missing) fail("ownership state missing; routing state unknown; restore a backup");
+    if (!isObj(marker) || marker.version !== 1 || !Array.isArray(marker.ids) ||
+        JSON.stringify([...marker.ids].sort()) !== JSON.stringify([...state.managed].sort()))
+      fail("ownership state does not match models.json; restore a backup");
+  }
+}
+
 function recordError(p, e) {
   try { writeAtomic(p.lastError, JSON.stringify({ at: new Date().toISOString(), error: String(e && e.message || e) }, null, 2) + "\n"); } catch {}
 }
 
+// Roll back ordinary I/O failures. This is not crash-atomic across two files.
+function commitRouting(p, before, out, state) {
+  const previousState = fs.existsSync(p.state) ? fs.readFileSync(p.state, "utf8") : null;
+  const text = JSON.stringify(out, null, 2) + "\n";
+  try {
+    const changed = writeModels(p, before, text);
+    if (state) writeAtomic(p.state, JSON.stringify(state, null, 2) + "\n"); else fs.rmSync(p.state, { force: true });
+    return changed;
+  } catch {
+    try {
+      const current = fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null;
+      if (before === null) fs.rmSync(p.models, { force: true }); else writeModels(p, current, before);
+      const currentState = fs.existsSync(p.state) ? fs.readFileSync(p.state, "utf8") : null;
+      if (currentState !== previousState) {
+        if (previousState === null) fs.rmSync(p.state, { force: true }); else writeAtomic(p.state, previousState);
+      }
+    } catch { fail("routing write failed and rollback incomplete; restore a backup before further changes"); }
+    fail("routing write failed; previous routing restored");
+  }
+}
+
 async function syncUnlocked(opts, p) {
   const before = fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null;
-  const cur = before === null ? {} : (() => { try { return JSON.parse(before); } catch (e) { fail(`models.json is not valid JSON: ${e.message}`); } })();
+  const cur = parseModels(before);
   const state = readState(p);
-  const { cfg, from } = loadConfig(p.dir);
-  const sw = resolveSwitch(p.dir, cfg);
+  checkOwnership(cur, state);
+  const override = resolveSwitch(p.dir, null);
+  const { cfg, from } = override.mode === "official" ? { cfg: null, from: "not loaded (official override)" } : loadConfig(p.dir);
+  const sw = override.mode === "official" ? override : resolveSwitch(p.dir, cfg);
+  if (from !== "none" && override.mode !== "official") validateConfig(cfg);
   const base = { config: from, switch: sw.mode, switchFrom: sw.from, disabled: sw.mode === "official" };
 
   if (!cfg || sw.mode === "official") {
-    const reason = !cfg ? "no provider configured (set BASE_URL or PRESET)" : "switched to official";
+    const reason = sw.mode === "official" ? "switched to official" : "no provider configured (set BASE_URL or PRESET)";
     if (opts.dryRun || !state.managed.length && !state.hidden.length && !state.displaced.length)
       return { ok: true, ...base, active: false, reason, changed: false };
     const out = stripManaged(cur, state);
-    const changed = writeModels(p, before, JSON.stringify(out, null, 2) + "\n");
-    fs.rmSync(p.state, { force: true });
+    const changed = commitRouting(p, before, out, null);
     return { ok: true, ...base, active: false, reason, changed };
   }
 
@@ -381,6 +467,7 @@ async function syncUnlocked(opts, p) {
   if (displaced.length) summary.ok = false;
 
   const out = { ...baseCur, models: [...user, ...plan.models] };
+  if (plan.models.length) out.workbuddy3pManaged = { version: 1, ids: [...mineIds] };
   const hide = new Set(plan.hideOfficial);
   const userAllow = hadAllowlist ? baseCur.availableModels : [];
   const hidden = userAllow.filter(x => hide.has(x));
@@ -388,14 +475,13 @@ async function syncUnlocked(opts, p) {
   const allow = [...new Set([...keptUser, ...plan.keep, ...out.models.map(m => "custom-local:" + m.id)])];
   if (plan.models.length) out.availableModels = allow;
 
-  const changed = writeModels(p, before, JSON.stringify(out, null, 2) + "\n");
   const providersState = {};
   for (const [id, prov] of plan.owner) (providersState[prov] = providersState[prov] || { url: plan.providers[prov].url, modelIds: [] }).modelIds.push(id);
   const newState = plan.models.length ? {
     managed: [...mineIds], allow: allow.filter(x => !keptUser.includes(x)), hidden, displaced, providers: providersState,
     hadAllowlist, updatedAt: new Date().toISOString(),
   } : null;
-  if (newState) writeAtomic(p.state, JSON.stringify(newState, null, 2) + "\n"); else fs.rmSync(p.state, { force: true });
+  const changed = commitRouting(p, before, out, newState);
   return { ...summary, changed };
 }
 
@@ -413,29 +499,41 @@ function uninstall() {
   return withLock(p.dir, () => {
     const before = fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null;
     const state = readState(p);
+    const cur = parseModels(before);
+    checkOwnership(cur, state);
     if (before === null || !fs.existsSync(p.state)) return { ok: true, changed: false };
-    const out = stripManaged(JSON.parse(before), state);
-    const changed = writeModels(p, before, JSON.stringify(out, null, 2) + "\n");
-    fs.rmSync(p.state, { force: true });
+    const out = stripManaged(cur, state);
+    const changed = commitRouting(p, before, out, null);
     return { ok: true, changed, remainingModels: out.models.length };
   });
 }
 
 function status() {
   const p = paths();
-  const state = readJsonLoose(p.state);
-  let cfg = null, from = "none", sw = null, err = null;
-  try { ({ cfg, from } = loadConfig(p.dir)); sw = resolveSwitch(p.dir, cfg); } catch (e) { err = e.message; }
-  return { switch: sw?.mode, switchFrom: sw?.from, config: from, active: !!(state && state.managed.length), managedModels: state?.managed?.length || 0,
-           hiddenOfficial: state?.hidden || [], lastError: readJsonLoose(p.lastError) || (err ? { error: err } : null) };
+  let state, current, cfg = null, from = "none", sw = null, err = null, active = null;
+  let managedModels = null;
+  try {
+    sw = resolveSwitch(p.dir, null);
+    state = readState(p); current = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null);
+    checkOwnership(current, state);
+    active = (current.models || []).some(m => state.managed.includes(m.id));
+    managedModels = (current.models || []).filter(m => state.managed.includes(m.id)).length;
+    if (sw.mode !== "official") { ({ cfg, from } = loadConfig(p.dir)); if (from !== "none") validateConfig(cfg); sw = resolveSwitch(p.dir, cfg); }
+  } catch (e) { err = e.message; }
+  return { ok: !err, configuredMode: sw?.mode, switch: sw?.mode, switchFrom: sw?.from, config: from,
+           active, modelsJsonActive: active, runtimeVerified: false,
+           managedModels,
+           hiddenOfficial: state?.hidden || [], lastError: err ? { error: err } : readJsonLoose(p.lastError) };
 }
 
 // Probe every model of the current plan (not the last written file). Response bodies are not returned.
 async function doctor() {
   const p = paths();
+  if (resolveSwitch(p.dir, null).mode === "official") return { ok: true, skipped: true, reason: "official mode", results: [] };
   const cur = readJsonLoose(p.models) || {};
   const { cfg } = loadConfig(p.dir);
   if (!cfg) return { ok: false, reason: "no provider configured", results: [] };
+  if (resolveSwitch(p.dir, cfg).mode === "official") return { ok: true, skipped: true, reason: "official mode", results: [] };
   const plan = await buildPlan(clone(cfg), p.dir, prevKeys(cur, readState(p)));
   const res = [];
   for (const m of plan.models) {

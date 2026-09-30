@@ -3,6 +3,6 @@
   "description": "Use your own third-party OpenAI-compatible APIs in cloud WorkBuddy / CodeBuddy Code",
   "owner": { "name": "AlgernonYin", "url": "https://github.com/AlgernonYin" },
   "plugins": [
-    { "name": "custom-api-models", "description": "Route WorkBuddy model choices to your own OpenAI-compatible APIs", "version": "2.2.1", "source": "./plugins/custom-api-models" }
+    { "name": "custom-api-models", "description": "Route WorkBuddy model choices to your own OpenAI-compatible APIs", "version": "2.2.2", "source": "./plugins/custom-api-models" }
   ]
 }

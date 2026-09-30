@@ -1,5 +1,5 @@
 ---
-description: Switch WorkBuddy models in this sandbox to the configured third-party API (custom-api-models)
+description: Configure WorkBuddy models in this sandbox for the configured third-party API (custom-api-models)
 ---
 Call the MCP tool `models_switch` of the `custom-api-models` server with `{"mode": "third-party"}`, then call `models_status`.
-Report in one or two short sentences which provider the models are routed to and any warnings. Never print API keys.
+Report in one or two short sentences: `configuredMode`, `switchFrom`, `modelsJsonActive`/`active`, and any warnings. Say `runtimeVerified` is false and this report does not prove that live traffic has switched. Never print API keys or full base URLs.
