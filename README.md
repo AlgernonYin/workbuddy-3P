@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 2.2.2
+**Version:** 2.2.3
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets the model picker use an OpenAI-compatible API that you control. The web and mobile clients share the same cloud sandbox mechanism, so no client or web page changes are required.
 
@@ -123,6 +123,14 @@ The accepted modes are `third-party` and `official`. Switch in any of these ways
 Switching to `official` removes plugin-written models and restores hidden official entries and replaced user models. Switching back to `third-party` routes them again. WorkBuddy must reload the file before new requests use it; routed menu labels can remain unchanged. `models_status` reports configured intent and disk state, not live traffic (`runtimeVerified: false`). If a running host does not reload, reopen that sandbox/session. A completely new sandbox follows account defaults, so set the desired switch there again.
 
 ## Configuration reference
+
+### Required model reselection after switching (cloud host limitation)
+
+The switch changes routing configuration, not the cloud session's in-memory selected model. Live testing on 2026-09-30 reproduced `Custom model custom-local:... has no endpoint url configured` after switching to official without changing the selection. This is not fixed by writing the config again.
+
+For web and mobile: select a non-routed official model (default `Hy3`), call `models_switch` or a slash command, then select the desired model before sending another message. If the label is already selected, choose `Hy3` and then the target to force a fresh selection. A new sandbox uses account defaults, not the previous sandbox's switch. The plugin reports `requiresModelReselection: true`; it does not silently edit the web page or claim a seamless hot switch.
+
+On a brand-new sandbox, plugin/profile initialization may finish after model selection. Reselect the target once the plugin is ready; do not assume the very first startup request used your API. Mobile shares the cloud configuration, but has not been device-tested.
 
 ### Top-level fields
 
@@ -333,7 +341,7 @@ The stdio MCP server provides:
 | `switchFrom` | Source: `switch file`, `WB3P_ENABLED`, `plugin option ENABLED`, `config`, or `default`. |
 | `warnings` | Non-fatal issues, such as a missing provider key, a duplicate upstream model ID, or a replaced user model. |
 
-`models_status` reports configuration and disk state, not traffic: `configuredMode` is resolved configuration intent, `modelsJsonActive`/`active` indicate third-party entries present in the on-disk `models.json`, and `runtimeVerified` is always `false` in 2.2.2. Do not claim that live traffic switched from this output.
+`models_status` reports configuration and disk state, not traffic: `configuredMode` is resolved configuration intent, `modelsJsonActive`/`active` indicate third-party entries present in the on-disk `models.json`, and `runtimeVerified` is always `false`. Do not claim that live traffic switched from this output.
 
 A normal sync also writes configuration failures to `~/.codebuddy/workbuddy-3p.last-error.json`; `models_status` exposes that error. Configuration validation failures reject the update and leave the last-good `models.json` unchanged; they do not automatically switch to official. Examples include invalid JSON in `WB3P_CONFIG_JSON`, `ROUTES`, or a config file; an illegal `mode`; and `providers` that is not a non-empty object. A high-priority official switch can bypass damaged config as described above, but still requires complete ownership state.
 
@@ -358,7 +366,7 @@ A normal sync also writes configuration failures to `~/.codebuddy/workbuddy-3p.l
 - Cloud sandboxes observed in 2026-09 (mainland China region) could not reach `github.com` (TLS reset), so a GitHub source can be accepted by the account API but the sandbox fails to `git clone` it. Use the maintainer mirror `https://cnb.cool/AlgernonYin/workbuddy-3P` (synchronized with GitHub `main`) when GitHub is unreachable.
 - New sessions may run in a fresh sandbox. The tested cloud options UI cannot save plugin options, and custom MCP saving fails; use the account-private skill package as the primary setup path. It is not an encrypted vault: `SKILL.md` has no key, while `workbuddy-3p.profile.json` can contain profile configuration and embedded keys. Treat the installed skill and user directory as trusted.
 
-- `models_status` cannot prove live traffic. `runtimeVerified` is always `false` in 2.2.2; use actual requests or host behavior when live routing must be verified.
+- `models_status` cannot prove live traffic. `runtimeVerified` is always `false`; use actual requests or host behavior when live routing must be verified.
 
 ## Uninstall and rollback
 

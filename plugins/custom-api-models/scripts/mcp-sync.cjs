@@ -3,7 +3,7 @@
 // the MCP status change makes the CLI reload models, so a fresh sandbox picks up the routes.
 "use strict";
 const lib = require("./sync-models.cjs");
-const VERSION = "2.2.2";
+const VERSION = "2.2.3";
 const errOut = (e) => ({ ok: false, error: String(e && e.message || e) });
 let status = { ok: false, reason: "pending" };
 const ready = lib.sync().catch(errOut).then(s => { status = s; });
@@ -11,7 +11,7 @@ const send = (m) => process.stdout.write(JSON.stringify(m) + "\n");
 const noArgs = { type: "object", properties: {} };
 const TOOLS = [
   { name: "models_status", description: "Show configured mode, models.json routing state and errors. This is disk configuration only, not proof of live request routing (runtimeVerified=false). Unknown state is not off. Never shows keys.", inputSchema: noArgs },
-  { name: "models_switch", description: "Switch this sandbox between the official WorkBuddy models and the configured third-party API. mode: \"official\", \"third-party\", or \"default\" (clear the local switch and follow plugin/env config).",
+  { name: "models_switch", description: "Configure official/third-party/default mode for this sandbox. IMPORTANT: the host can retain the previous model ID after switching. Tell the user to reselect a model before the next message (if unchanged, select Hy3 then the target). Prefer a non-routed official model such as default Hy3 while switching. This tool cannot change the host's active selection.",
     inputSchema: { type: "object", properties: { mode: { type: "string", enum: ["official", "third-party", "default"] } }, required: ["mode"] } },
   { name: "models_resync", description: "Re-read the workbuddy-3p config and rewrite ~/.codebuddy/models.json", inputSchema: noArgs },
   { name: "models_doctor", description: "In third-party mode send one billable tiny request per configured model; report HTTP status only, not runtime routing proof. Skip all requests in official mode.", inputSchema: noArgs },
@@ -22,7 +22,8 @@ async function callTool(name, args = {}) {
   if (name === "models_switch") {
     if (!["official", "third-party", "default"].includes(args.mode)) throw new Error("mode must be official, third-party or default");
     status = await lib.setSwitch(args.mode === "default" ? "" : args.mode).catch(errOut);
-    return { ...clean(status), note: "Applies to this sandbox after the host reloads models.json; not a runtime traffic check. New sandboxes follow account defaults." };
+    return { ...clean(status), requiresModelReselection: true,
+      note: "Before the next message, reselect the target in the model picker; if it appears unchanged, select Hy3 then the target. The host may retain a removed custom-local ID and report no endpoint until reselected. This tool cannot update the active selection. New sandboxes follow account defaults; this is not a runtime traffic check." };
   }
   if (name === "models_resync") { status = await lib.sync().catch(errOut); return clean(status); }
   if (name === "models_doctor") return lib.doctor().catch(errOut);

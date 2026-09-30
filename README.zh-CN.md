@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-**版本：** 2.2.2
+**版本：** 2.2.3
 
 WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkBuddy / CodeBuddy Code。它让模型选择使用你自己的 OpenAI 兼容 API。网页端和手机端共用同一套云沙箱机制，因此不需要修改网页或客户端。
 
@@ -123,6 +123,14 @@ JSON 损坏或文件不可读时会报错，不会跳过该来源继续查找。
 切到 `official` 会移除插件写入的模型，恢复被隐藏的官方条目和被替换的用户模型；再切回 `third-party` 会重新路由。WorkBuddy 重新加载文件后，新请求才会采用这些路由，菜单名称可能不变。`models_status` 只报告配置意图和磁盘状态，不证明实际流量（`runtimeVerified: false`）。宿主未重新加载时，重新打开同一沙箱/会话；全新沙箱会采用账号默认值，需要再次设置所需开关。
 
 ## 配置参考
+
+### 切换后必须重新选模型（云端宿主限制）
+
+开关修改路由配置，不会修改云端会话内存中的当前模型。2026-09-30 实测：切到官方后不重新选模型，会出现 `Custom model custom-local:... has no endpoint url configured`。重复写配置不能消除旧选择。
+
+网页和手机操作：先选择未路由的官方模型（默认 `Hy3`），调用 `models_switch` 或斜杠命令，再选择目标模型后发送下一条消息。如果菜单已选中同名项，先切到 `Hy3` 再选目标，确保触发重新选择。全新沙箱采用账号默认值，不继承旧沙箱的开关。工具返回 `requiresModelReselection: true`；插件不会偷偷修改网页，也不承诺无缝热切换。
+
+全新沙箱的插件/私有配置初始化可能晚于模型选择；插件就绪后重新选择目标，不能假定启动后的第一条请求已走自定义 API。手机端共用云端配置，但尚未进行真机验收。
 
 ### 顶层字段
 
@@ -333,7 +341,7 @@ stdio MCP server 提供：
 | `switchFrom` | 来源：`switch file`、`WB3P_ENABLED`、`plugin option ENABLED`、`config` 或 `default`。 |
 | `warnings` | 非致命问题，例如 provider 缺 key、上游模型 ID 冲突或用户模型被替换。 |
 
-`models_status` 只报告配置和磁盘状态：`configuredMode` 是配置意图，`modelsJsonActive`/`active` 是磁盘 `models.json` 中的第三方条目，`runtimeVerified` 在 2.2.2 中恒为 `false`。不能凭此声称真实流量已切换。
+`models_status` 只报告配置和磁盘状态：`configuredMode` 是配置意图，`modelsJsonActive`/`active` 是磁盘 `models.json` 中的第三方条目，`runtimeVerified` 恒为 `false`。不能凭此声称真实流量已切换。
 
 正常同步还会把配置错误写入 `~/.codebuddy/workbuddy-3p.last-error.json`，`models_status` 可见该错误。配置校验失败会拒绝本次更新并保留 last-good `models.json`，不会自动切到 `official`。典型情况包括：`WB3P_CONFIG_JSON`、`ROUTES` 或配置文件 JSON 损坏，`mode` 非法，`providers` 不是非空对象。高优先级 `official` 开关可按上文绕过损坏配置，但仍依赖完整 ownership state。
 
@@ -358,7 +366,7 @@ stdio MCP server 提供：
 - 2026-09 实测的云沙箱（中国大陆区域）无法访问 `github.com`（TLS 被重置）：账号接口能添加 GitHub 来源，但沙箱内 `git clone` 会失败。GitHub 不可访问时使用维护者镜像 `https://cnb.cool/AlgernonYin/workbuddy-3P`（与 GitHub `main` 同步）。
 - 新会话可能运行在全新的沙箱。实测云端网页无法保存插件选项，自定义 MCP 保存也会失败；应以账号私有技能包为主方案。它不是加密保险库：`SKILL.md` 无 key，`workbuddy-3p.profile.json` 可能含配置和嵌入 key。已安装技能和用户目录必须可信。
 
-- `models_status` 不能证明真实流量；`runtimeVerified` 在 2.2.2 中恒为 `false`。需要确认实际路由时，应做真实请求或观察宿主行为。
+- `models_status` 不能证明真实流量；`runtimeVerified` 恒为 `false`。需要确认实际路由时，应做真实请求或观察宿主行为。
 
 ## 卸载与回滚
 
