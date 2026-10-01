@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-**版本：** 2.2.3
+**版本：** 2.3.0
 
 WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkBuddy / CodeBuddy Code。它让模型选择使用你自己的 OpenAI 兼容 API。网页端和手机端共用同一套云沙箱机制，因此不需要修改网页或客户端。
 
@@ -70,6 +70,12 @@ python scripts/make-private-profile.py --config /opt/workbuddy-3p/config.json --
 {
   "default": "main",
   "mode": "same-name",
+  "effort": {
+    "default": "high",
+    "models": {
+      "main:qwen3.8-max": "xhigh"
+    }
+  },
   "providers": {
     "main": {
       "baseUrl": "https://api.example.com/v1",
@@ -144,6 +150,7 @@ JSON 损坏或文件不可读时会报错，不会跳过该来源继续查找。
 | `models` | 可选的能力覆盖，键格式为 `"<provider>:<upstream-model>"`。 |
 | `defaults` | 可选能力默认值；provider 没有 `defaults` 且模型没有 preset template 时使用。 |
 | `enabled` | `official`/`false` 选择官方后端；`third-party`/`true` 启用路由。开关文件、`WB3P_ENABLED` 和插件选项 `ENABLED` 优先于它。 |
+| `effort` | 可选的路由模型 reasoning effort 默认值。`effort.default` 是默认档位，`effort.models["<provider>:<upstream-model>"]` 设置单模型档位；沙箱本地覆盖优先于配置。 |
 
 ### Provider 字段
 
@@ -214,6 +221,41 @@ provider 形式的写法应使用已配置的 provider 名称。显式路由优�
 ```
 
 上游 API 需要时，preset template 还可以使用 `onlyReasoning`、`useCustomProtocol`、`compat`、`thinkingLevelMap` 和 `reasoning` 等字段。
+
+### reasoning effort 默认值
+
+2.3.0 新增路由模型的 reasoning effort 默认值。支持 `minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`；`off`、`ultracode` 和 token 预算不属于此功能。
+
+在顶层 `effort` 对象中配置默认值：
+
+```json
+{
+  "effort": {
+    "default": "high",
+    "models": {
+      "main:qwen3.8-max": "xhigh"
+    }
+  }
+}
+```
+
+沙箱本地覆盖文件为 `~/.codebuddy/workbuddy-3p.effort.json`，含 `version: 1`，只保存 effort 选择，不保存 API key。生效优先级为：
+
+1. 本地 per-model 覆盖
+2. 本地 default
+3. 配置中的 per-model
+4. 配置中的 default
+5. 模型原默认值
+
+`models_effort` 支持 `{ action: "set" | "reset", scope: "default" | "model" | "all", level?, model? }` 和 `{ action: "status", model? }`。`status` 只接受可选 `model`，不接受 `scope` 或 `level`。未指定模型时，`set` 默认使用 `scope: "default"`。指定单模型时，传 `scope: "model"` 和 `model: "<provider>:<upstream-model>"`；唯一官方别名或 upstream ID 也可能解析成功，但建议始终使用完整的 `provider:upstream-model`。`reset` 配合 `scope: "all"` 会删除所有本地覆盖；配合 `scope: "model"` 会删除该模型的本地覆盖，再回落到剩余来源，但不保证回到 preset 原值。
+
+请求的档位会按模型能力元数据校验。默认/全局档位会跳过不支持的模型并列明；单模型档位不支持时会拒绝。本文不提供固定的 provider 支持表，因为支持情况取决于模型和配置；应使用 `models_effort` status 查看当前配置集，不要据此推断整个 provider 的能力。
+
+这些值是模型默认值，原生会话或用户侧 `reasoningEffort` 仍可优先覆盖。官方模式下，插件不修改宿主原生的全局 `reasoningEffort` 或官方参数；设置会以 deferred 配置保存，切回第三方后再应用。status 只表示配置/磁盘状态，不证明实际请求已使用该档位（`runtimeVerified: false`）。宿主重新加载后，可能还需要重新选择模型。
+
+本地 effort 设置只持久化到当前沙箱，不会自动同步到账号。若要让新沙箱使用相同默认值，应把 `effort` 放入账号私有 profile 的 `config`，再打包并上传该 profile；不要把 API key 或 profile 放到公网。手机端共用云端机制，但尚未进行真机验收。
+
+工具返回的 `profileConfigPatch.effort` 不含密钥，可用于**替换**私有配置中完整的 `effort` 对象；不要与旧 `effort.models` 逐字段合并，否则可能改变覆盖优先级。
 
 ### API key 解析顺序
 
@@ -308,6 +350,12 @@ node scripts/sync-models.cjs --switch clear
 node scripts/sync-models.cjs --status
 node scripts/sync-models.cjs --uninstall
 node scripts/sync-models.cjs --quiet
+node scripts/sync-models.cjs --effort-status
+node scripts/sync-models.cjs --effort-status --model main:qwen3.8-max
+node scripts/sync-models.cjs --effort high
+node scripts/sync-models.cjs --effort xhigh --model main:qwen3.8-max
+node scripts/sync-models.cjs --effort-reset --model main:qwen3.8-max
+node scripts/sync-models.cjs --effort-reset --all
 ```
 
 | 选项 | 行为 |
@@ -320,6 +368,9 @@ node scripts/sync-models.cjs --quiet
 | `--status` | 返回 `configuredMode`、来源、`modelsJsonActive`/`active`（磁盘条目）、`runtimeVerified`（恒为 `false`）和最近错误；provider endpoint 只报告 `host`。 |
 | `--uninstall` | 删除归属记录和生成的 allowlist 条目，保留其它用户模型。state 损坏，或存在归属标记但 state 丢失时拒绝改动。 |
 | `--quiet` | 不输出正常 JSON。错误仍写入 stderr，但退出码为 `0`。`SessionStart` hook 使用该模式。 |
+| `--effort-status [--model ...]` | 返回全部已配置模型的 effort 配置和实际来源，或只返回指定模型。这里只是配置/磁盘状态，不证明实际请求已采用该值（`runtimeVerified: false`）。 |
+| `--effort <level> [--model ...]` | 设置本地默认档位；带 `--model` 时设置本地单模型覆盖。支持 `minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`；对不支持的默认/全局目标会跳过并列明，对不支持的单个模型会拒绝。 |
+| `--effort-reset [--model ... \| --all]` | 删除指定模型的本地覆盖；带 `--all` 时删除所有本地覆盖。单模型重置会依次回落到本地默认、配置 per-model、配置 default 和模型原默认值，不保证回到 preset 原值。 |
 
 stdio MCP server 提供：
 
@@ -329,6 +380,9 @@ stdio MCP server 提供：
 | `models_switch` | 将当前沙箱切到 `official` 或 `third-party`，或用 `default` 清除开关。 |
 | `models_resync` | 重新读取配置并改写 `models.json`。 |
 | `models_doctor` | `official` 模式跳过且不请求第三方；`third-party` 模式对计划中的每个模型发送一次小额计费请求，并报告 HTTP 状态和耗时。 |
+| `models_effort` | 查看或修改 reasoning effort 默认值。参数为 `{action:"set"\|"reset", scope:"default"\|"model"\|"all", level?, model?}` 或 `{action:"status", model?}`。未指定模型时，`set` 默认使用 `scope:"default"`。指定单模型时使用 `provider:upstream-model`；唯一官方别名或 upstream ID 也可能解析，但建议使用完整写法。 |
+
+可用插件 `commands` 目录中的 `/models-effort` 调用 `models_effort`。status 指令不得猜测当前选中的模型：应使用用户明确给出的模型，或先列出已配置能力。set/reset 必须严格按用户明确给出的模型和档位执行，不要替用户选择档位。
 
 ### 同步摘要
 
