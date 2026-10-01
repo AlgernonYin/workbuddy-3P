@@ -367,7 +367,7 @@ node scripts/sync-models.cjs --effort-reset --all
 | `--switch clear` | 删除当前沙箱的开关文件，并回到较低优先级的来源。 |
 | `--status` | 返回 `configuredMode`、来源、`modelsJsonActive`/`active`（磁盘条目）、`runtimeVerified`（恒为 `false`）和最近错误；provider endpoint 只报告 `host`。 |
 | `--uninstall` | 删除归属记录和生成的 allowlist 条目，保留其它用户模型。state 损坏，或存在归属标记但 state 丢失时拒绝改动。 |
-| `--quiet` | 不输出正常 JSON。错误仍写入 stderr，但退出码为 `0`。`SessionStart` hook 使用该模式。 |
+| `--quiet` | 不输出正常 JSON，错误仍写入 stderr。思考强度命令失败时保留非零退出码；其它命令按 `SessionStart` hook 的兼容行为返回 `0`。 |
 | `--effort-status [--model ...]` | 返回全部已配置模型的 effort 配置和实际来源，或只返回指定模型。这里只是配置/磁盘状态，不证明实际请求已采用该值（`runtimeVerified: false`）。 |
 | `--effort <level> [--model ...]` | 设置本地默认档位；带 `--model` 时设置本地单模型覆盖。支持 `minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`；对不支持的默认/全局目标会跳过并列明，对不支持的单个模型会拒绝。 |
 | `--effort-reset [--model ... \| --all]` | 删除指定模型的本地覆盖；带 `--all` 时删除所有本地覆盖。单模型重置会依次回落到本地默认、配置 per-model、配置 default 和模型原默认值，不保证回到 preset 原值。 |
