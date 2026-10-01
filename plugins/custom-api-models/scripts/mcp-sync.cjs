@@ -3,13 +3,20 @@
 // the MCP status change makes the CLI reload models, so a fresh sandbox picks up the routes.
 "use strict";
 const lib = require("./sync-models.cjs");
-const VERSION = "2.2.3";
+const VERSION = "2.3.0";
 const errOut = (e) => ({ ok: false, error: String(e && e.message || e) });
 let status = { ok: false, reason: "pending" };
 const ready = lib.sync().catch(errOut).then(s => { status = s; });
 const send = (m) => process.stdout.write(JSON.stringify(m) + "\n");
 const noArgs = { type: "object", properties: {} };
 const TOOLS = [
+  { name: "models_effort", description: "Inspect, set or reset persistent third-party MODEL DEFAULT effort, not native session/global settings. Status is secret-free and sends no requests. A sandbox default skips unsupported models; model-specific settings reject unsupported levels. Local settings persist only in this sandbox; profileConfigPatch can be merged into an account-private profile for future sandboxes (not automatically uploaded). Native reasoningEffort overrides win. Official mode only saves deferred preferences. After the host reloads, reselect the model; runtimeVerified=false.",
+    inputSchema: { type: "object", additionalProperties: false, properties: {
+      action: { type: "string", enum: ["status", "set", "reset"], default: "status" },
+      scope: { type: "string", enum: ["default", "model", "all"], description: "Set default or one model; all is reset-only." },
+      level: { type: "string", enum: ["minimal", "low", "medium", "high", "xhigh", "max"] },
+      model: { type: "string", description: "provider:upstream-model from status, or an unambiguous upstream id/official alias" }
+    } } },
   { name: "models_status", description: "Show configured mode, models.json routing state and errors. This is disk configuration only, not proof of live request routing (runtimeVerified=false). Unknown state is not off. Never shows keys.", inputSchema: noArgs },
   { name: "models_switch", description: "Configure official/third-party/default mode for this sandbox. IMPORTANT: the host can retain the previous model ID after switching. Tell the user to reselect a model before the next message (if unchanged, select Hy3 then the target). Prefer a non-routed official model such as default Hy3 while switching. This tool cannot change the host's active selection.",
     inputSchema: { type: "object", properties: { mode: { type: "string", enum: ["official", "third-party", "default"] } }, required: ["mode"] } },
@@ -18,6 +25,16 @@ const TOOLS = [
 ];
 const clean = (r) => { if (!r || typeof r !== "object") return r; const c = { ...r }; delete c.dst; delete c.plan; return c; };
 async function callTool(name, args = {}) {
+  if (name === "models_effort") {
+    if (!args || typeof args !== "object" || Array.isArray(args) || Object.keys(args).some(k => !["action", "scope", "level", "model"].includes(k)))
+      throw new Error("invalid effort arguments");
+    const action = args.action || "status";
+    if (action === "status") {
+      if (args.level !== undefined || args.scope !== undefined) throw new Error("status accepts only an optional model");
+      return lib.effortStatus({ model: args.model });
+    }
+    return lib.setEffort({ ...args, action });
+  }
   if (name === "models_status") return { ...lib.status(), lastSync: clean(status) };
   if (name === "models_switch") {
     if (!["official", "third-party", "default"].includes(args.mode)) throw new Error("mode must be official, third-party or default");
