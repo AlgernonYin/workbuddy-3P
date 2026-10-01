@@ -367,7 +367,7 @@ node scripts/sync-models.cjs --effort-reset --all
 | `--switch clear` | Remove the per-sandbox switch and follow the lower-priority sources. |
 | `--status` | Report `configuredMode`, source, `modelsJsonActive`/`active` (on-disk entries), `runtimeVerified` (always `false`), and the last error. Provider endpoint reporting is limited to `host`. |
 | `--uninstall` | Remove entries recorded in ownership state and generated allowlist entries; keep other user models. Refuse invalid state or a missing state alongside the ownership marker. |
-| `--quiet` | Suppress normal JSON output. Errors still go to stderr, but the exit code is `0`. The `SessionStart` hook uses this mode. |
+| `--quiet` | Suppress normal JSON output. Errors still go to stderr. Effort commands retain a non-zero failure exit code; other commands use `0` for the `SessionStart` hook. |
 | `--effort-status [--model ...]` | Report effort configuration and effective source for all configured models, or only the named model. This is config/disk state, not live request proof (`runtimeVerified: false`). |
 | `--effort <level> [--model ...]` | Set the local default level, or a local per-model override when `--model` is present. Supported levels are `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; unsupported global targets are skipped and listed, while an unsupported single-model target is rejected. |
 | `--effort-reset [--model ... \| --all]` | Remove the local per-model override, or all local overrides with `--all`. A model reset falls back through local default, config per-model, config default, and the model's original default; it does not guarantee a return to the preset value. |
