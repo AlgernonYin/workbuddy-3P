@@ -299,9 +299,10 @@ async function setEffort(args = {}) {
     let cleanupWarning;
     try { fs.rmSync(p.lastError, { force: true }); } catch { cleanupWarning = "routing committed; stale error record could not be cleared"; }
     for (const m of report.models) delete m.onDiskEffort;
+    const requiresModelReselection = sw.mode !== "official" || result.changed === true;
     return { ...report, changed: result.changed, preferencesChanged: previous !== (Object.keys(local).length === 1 ? null : JSON.stringify(local, null, 2) + "\n"), routingWarnings: result.warnings || [],
-      ...(cleanupWarning ? { cleanupWarning } : {}), deferred: sw.mode === "official", requiresModelReselection: sw.mode !== "official",
-      note: report.note + " After the host reloads, reselect the model before the next message. Reset removes local overrides and falls back to config/preset defaults." };
+      ...(cleanupWarning ? { cleanupWarning } : {}), deferred: sw.mode === "official", requiresModelReselection,
+      note: report.note + (requiresModelReselection ? " After the host reloads, reselect the model before the next message." : " Official routing is unchanged; no model reselection is required for this deferred preference.") + " Reset removes local overrides and falls back to config/preset defaults." };
   });
 }
 
@@ -678,10 +679,25 @@ if (require.main === module) {
   const a = process.argv.slice(2), quiet = a.includes("--quiet");
   const val = (flag) => { const i = a.indexOf(flag); return i >= 0 ? a[i + 1] : undefined; };
   const effortFlags = ["--effort-status", "--effort-reset", "--effort"].filter(f => a.includes(f));
-  const badEffortArgs = effortFlags.length && (effortFlags.length !== 1 ||
-    ["--effort", "--model"].some(f => a.includes(f) && (!val(f) || val(f).startsWith("--"))) ||
-    ["--official", "--third-party", "--switch", "--uninstall", "--doctor", "--status", "--dry-run"].some(f => a.includes(f)) ||
-    a.includes("--all") && (!a.includes("--effort-reset") || a.includes("--model")));
+  // Reject the entire effort argv before any I/O. A misspelled --model must
+  // never silently widen a single-model operation into a sandbox default.
+  let badEffortArgs = false;
+  if (effortFlags.length) {
+    const allowed = new Set([effortFlags[0], "--model", "--quiet"]);
+    if (effortFlags[0] === "--effort-reset") allowed.add("--all");
+    const seen = new Set();
+    badEffortArgs = effortFlags.length !== 1;
+    for (let i = 0; i < a.length && !badEffortArgs; i++) {
+      const flag = a[i];
+      if (!allowed.has(flag) || seen.has(flag)) { badEffortArgs = true; break; }
+      seen.add(flag);
+      if (flag === "--effort" || flag === "--model") {
+        const value = a[++i];
+        if (!value || value.startsWith("-")) badEffortArgs = true;
+      }
+    }
+    if (seen.has("--all") && seen.has("--model")) badEffortArgs = true;
+  }
   let run;
   if (badEffortArgs) run = Promise.reject(new ConfigError("invalid or incomplete effort CLI arguments"));
   else if (a.includes("--effort-status")) run = effortStatus({ model: val("--model") });
@@ -695,5 +711,5 @@ if (require.main === module) {
   else if (a.includes("--switch")) run = setSwitch(val("--switch") === "clear" ? "" : val("--switch"));
   else run = sync({ dryRun: a.includes("--dry-run") }).then(r => { if (r.plan) delete r.plan; return r; });
   run.then(r => { if (!quiet) console.log(JSON.stringify(r, null, 2)); },
-           e => { console.error(JSON.stringify({ ok: false, error: String(e && e.message || e) })); process.exitCode = quiet ? 0 : 1; });
+           e => { console.error(JSON.stringify({ ok: false, error: String(e && e.message || e) })); process.exitCode = effortFlags.length ? 1 : quiet ? 0 : 1; });
 }
