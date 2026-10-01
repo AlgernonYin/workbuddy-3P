@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 2.2.3
+**Version:** 2.3.0
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets the model picker use an OpenAI-compatible API that you control. The web and mobile clients share the same cloud sandbox mechanism, so no client or web page changes are required.
 
@@ -70,6 +70,12 @@ Create `~/.codebuddy/workbuddy-3p.json`:
 {
   "default": "main",
   "mode": "same-name",
+  "effort": {
+    "default": "high",
+    "models": {
+      "main:qwen3.8-max": "xhigh"
+    }
+  },
   "providers": {
     "main": {
       "baseUrl": "https://api.example.com/v1",
@@ -144,6 +150,7 @@ On a brand-new sandbox, plugin/profile initialization may finish after model sel
 | `models` | Optional capability overrides keyed by `"<provider>:<upstream-model>"`. |
 | `defaults` | Optional capability defaults used when a provider has no `defaults` and the model has no preset template. |
 | `enabled` | `official`/`false` selects the official backend; `third-party`/`true` enables routing. The switch file, `WB3P_ENABLED`, and plugin option `ENABLED` take precedence. |
+| `effort` | Optional reasoning-effort defaults for routed models. `effort.default` is the fallback level, and `effort.models["<provider>:<upstream-model>"]` sets per-model levels. Local sandbox overrides take precedence. |
 
 ### Provider fields
 
@@ -214,6 +221,41 @@ Example:
 ```
 
 Preset templates also use fields such as `onlyReasoning`, `useCustomProtocol`, `compat`, `thinkingLevelMap`, and `reasoning` when required by the upstream API.
+
+### Reasoning effort defaults
+
+Version 2.3.0 adds reasoning-effort defaults for routed models. Supported levels are `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. `off`, `ultracode`, and token budgets are not part of this feature.
+
+Configure defaults in the top-level `effort` object:
+
+```json
+{
+  "effort": {
+    "default": "high",
+    "models": {
+      "main:qwen3.8-max": "xhigh"
+    }
+  }
+}
+```
+
+The sandbox-local override file is `~/.codebuddy/workbuddy-3p.effort.json`. It contains `version: 1` and effort selections only; it does not contain API keys. The effective precedence is:
+
+1. local per-model override
+2. local default
+3. config per-model
+4. config default
+5. the model's original default
+
+`models_effort` supports `{ action: "set" | "reset", scope: "default" | "model" | "all", level?, model? }` and `{ action: "status", model? }`. For `status`, pass only the optional model; `scope` and `level` are not accepted. `set` defaults to `scope: "default"` when no model is given. To target one model, pass `scope: "model"` and `model: "<provider>:<upstream-model>"`; a unique official alias or upstream ID may also resolve, but the full `provider:upstream-model` form is recommended. `reset` with `scope: "all"` removes all local overrides. With `scope: "model"`, it removes that model's local override and falls back through the remaining sources; this does not guarantee a return to the preset value.
+
+Requested levels are validated against model capability metadata. A default/global change skips unsupported models and lists them; a single-model change rejects an unsupported level. No fixed provider support table is provided here because support is model- and configuration-specific. Use `models_effort` status for the configured set instead of inferring broad provider capability.
+
+These values are model defaults. A native session or user `reasoningEffort` can take precedence. In official mode, the plugin does not modify the host's native global `reasoningEffort` or official parameters; effort settings are saved as deferred configuration and applied after switching back to third-party. Status is configuration/disk state, not proof of an actual request (`runtimeVerified: false`). After the host reloads, the model may need to be reselected.
+
+Local effort settings persist only in that sandbox and do not automatically sync to the account. To make the same default apply to new sandboxes, put `effort` under the account-private profile's `config`, then package and upload the profile. Do not put API keys or the profile in a public location. Mobile shares the cloud mechanism, but has not been verified on a real device.
+
+The secret-free `profileConfigPatch.effort` replaces the complete `effort` object in your private config. Do not field-merge it with old `effort.models`, which can change override precedence.
 
 ### API key resolution
 
@@ -308,6 +350,12 @@ node scripts/sync-models.cjs --switch clear
 node scripts/sync-models.cjs --status
 node scripts/sync-models.cjs --uninstall
 node scripts/sync-models.cjs --quiet
+node scripts/sync-models.cjs --effort-status
+node scripts/sync-models.cjs --effort-status --model main:qwen3.8-max
+node scripts/sync-models.cjs --effort high
+node scripts/sync-models.cjs --effort xhigh --model main:qwen3.8-max
+node scripts/sync-models.cjs --effort-reset --model main:qwen3.8-max
+node scripts/sync-models.cjs --effort-reset --all
 ```
 
 | Option | Behavior |
@@ -319,7 +367,10 @@ node scripts/sync-models.cjs --quiet
 | `--switch clear` | Remove the per-sandbox switch and follow the lower-priority sources. |
 | `--status` | Report `configuredMode`, source, `modelsJsonActive`/`active` (on-disk entries), `runtimeVerified` (always `false`), and the last error. Provider endpoint reporting is limited to `host`. |
 | `--uninstall` | Remove entries recorded in ownership state and generated allowlist entries; keep other user models. Refuse invalid state or a missing state alongside the ownership marker. |
-| `--quiet` | Suppress normal JSON output. Errors still go to stderr, but the exit code is `0`. The `SessionStart` hook uses this mode. |
+| `--quiet` | Suppress normal JSON output. Errors still go to stderr. Effort commands retain a non-zero failure exit code; other commands use `0` for the `SessionStart` hook. |
+| `--effort-status [--model ...]` | Report effort configuration and effective source for all configured models, or only the named model. This is config/disk state, not live request proof (`runtimeVerified: false`). |
+| `--effort <level> [--model ...]` | Set the local default level, or a local per-model override when `--model` is present. Supported levels are `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; unsupported global targets are skipped and listed, while an unsupported single-model target is rejected. |
+| `--effort-reset [--model ... \| --all]` | Remove the local per-model override, or all local overrides with `--all`. A model reset falls back through local default, config per-model, config default, and the model's original default; it does not guarantee a return to the preset value. |
 
 The stdio MCP server provides:
 
@@ -329,6 +380,9 @@ The stdio MCP server provides:
 | `models_switch` | Set this sandbox to `official` or `third-party`, or use `default` to clear the switch. |
 | `models_resync` | Re-read the config and rewrite `models.json`. |
 | `models_doctor` | Official mode skips with no third-party requests. Third-party mode sends one tiny billable request per planned model and reports HTTP status and elapsed time. |
+| `models_effort` | Inspect or change reasoning-effort defaults. Input is `{action:"set"\|"reset", scope:"default"\|"model"\|"all", level?, model?}` or `{action:"status", model?}`. `set` defaults to `scope:"default"` when no model is given. Use `provider:upstream-model` for an explicit model; a unique official alias or upstream ID may also resolve, but the full form is recommended. |
+
+Use `/models-effort` from the plugin `commands` directory to call `models_effort`. Status instructions must not guess the currently selected model: use a model named by the user or list the configured capabilities first. Set and reset instructions must follow the user's explicit model and level; do not choose a level on the user's behalf.
 
 ### Sync summary
 

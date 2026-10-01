@@ -7,6 +7,7 @@ const ROOT = path.resolve(__dirname, "..");
 const PRESETS = path.join(ROOT, "presets");
 const ENV = process.env;
 const MODES = ["same-name", "preset-only", "explicit"];
+const effort = require("./effort.cjs");
 
 class ConfigError extends Error {}
 const fail = (msg) => { throw new ConfigError(msg); };
@@ -19,6 +20,7 @@ const paths = (dir = configDir()) => ({
   dir, models: path.join(dir, "models.json"), state: path.join(dir, "workbuddy-3p.state.json"),
   lock: path.join(dir, "workbuddy-3p.lock"), switch: path.join(dir, "workbuddy-3p.switch"),
   lastError: path.join(dir, "workbuddy-3p.last-error.json"), backup: path.join(dir, "models.json.bak-workbuddy-3p"),
+  effort: path.join(dir, "workbuddy-3p.effort.json"),
 });
 
 // Missing file -> null. Existing but unreadable/invalid -> error (never silently ignored).
@@ -176,6 +178,7 @@ function validateConfig(cfg) {
   if (cfg.keepOfficial !== undefined && !(Array.isArray(cfg.keepOfficial) && cfg.keepOfficial.every(x => typeof x === "string")))
     fail("keepOfficial must be an array of strings");
   for (const k of ["models", "defaults"]) if (cfg[k] !== undefined && !isObj(cfg[k])) fail(`${k} must be an object`);
+  if (cfg.effort !== undefined) effort.validatePreferences(cfg.effort);
 }
 
 function loadPreset(name) {
@@ -186,6 +189,122 @@ function loadPreset(name) {
   return p;
 }
 const OFFICIAL = readJsonLoose(path.join(PRESETS, "workbuddy-official.json")) || { keepOfficial: [], routable: [] };
+
+// ---------- persistent model-default effort (no credentials) ----------
+function readEffort(p) {
+  const value = readJsonStrict(p.effort, "local effort preferences");
+  if (value === null && !fs.existsSync(p.effort)) return { version: 1 };
+  return effort.validatePreferences(value, true);
+}
+
+function effortReport(plan, cfg, local, sw, current, state, selector) {
+  const selected = selector ? effort.resolveTarget(plan, selector) : null;
+  const official = sw.mode === "official";
+  // Export a replacement effort object with the same precedence after moving
+  // local preferences into a profile. A local default masks config per-models.
+  const profileModels = { ...(local.default === undefined ? cfg.effort?.models : {}), ...local.models };
+  const profileDefault = local.default ?? cfg.effort?.default;
+  const models = plan.effort.models.filter(m => !selected || m.target === selected).map(m => {
+    const disk = (current.models || []).find(x => x.id === m.model && state.managed.includes(x.id));
+    return { ...m, applied: !official && m.applied,
+      onDiskEffort: disk?.reasoning?.defaultEffort ?? disk?.reasoning?.effort ?? null,
+      ...(official ? { reason: "official mode; third-party preference deferred" } : {}) };
+  });
+  return { ok: true, configuredMode: sw.mode, runtimeVerified: false,
+    preferences: { local, config: cfg.effort || {} }, models,
+    skipped: models.filter(m => !official && m.requestedSource !== "model" && !m.applied),
+    orphanedTargets: plan.effort.orphanedTargets,
+    profileConfigPatch: { effort: { ...(profileDefault !== undefined ? { default: profileDefault } : {}),
+      ...(Object.keys(profileModels).length ? { models: profileModels } : {}) } },
+    note: "These are third-party model defaults, not verified request parameters. Native session/user reasoningEffort overrides take precedence. Local changes do not synchronize the account or other sandboxes." };
+}
+
+async function effortContext(p, local) {
+  const override = resolveSwitch(p.dir, null);
+  let cfg, sw = override, plan;
+  try {
+    ({ cfg } = loadConfig(p.dir));
+    if (!cfg) fail("no provider configured; effort capabilities unavailable");
+    sw = resolveSwitch(p.dir, cfg);
+    plan = await buildPlan(clone(cfg), p.dir, { providers: {}, keys: {} }, { metadataOnly: true, preferences: local });
+  } catch (e) {
+    // The explicit official escape hatch must work even with missing/bad 3P
+    // config. Without capabilities, only global deferred preferences are safe.
+    if (override.mode !== "official") throw e;
+    return { cfg: {}, sw: override, plan: { models: [], effort: { models: [], orphanedTargets: Object.keys(local.models || {}) } },
+      capabilityWarning: "third-party capabilities unavailable in official mode; model-specific changes require valid configuration" };
+  }
+  return { cfg, sw, plan };
+}
+
+async function effortStatus({ model } = {}) {
+  const p = paths();
+  return withLock(p.dir, async () => {
+    const current = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null);
+    const state = readState(p); checkOwnership(current, state);
+    const local = readEffort(p), { cfg, sw, plan, capabilityWarning } = await effortContext(p, local);
+    return { ...effortReport(plan, cfg, local, sw, current, state, model), ...(capabilityWarning ? { capabilityWarning } : {}) };
+  });
+}
+
+async function setEffort(args = {}) {
+  if (!isObj(args)) fail("effort arguments must be an object");
+  const action = args.action || "set", scope = args.scope || (args.model ? "model" : "default");
+  if (!["set", "reset"].includes(action) || !["default", "model", "all"].includes(scope) ||
+      action === "set" && scope === "all" || scope !== "model" && args.model !== undefined ||
+      action === "reset" && args.level !== undefined)
+    fail("invalid effort action/scope combination");
+  if (action === "set" && !effort.LEVELS.includes(args.level)) fail("invalid effort level; use minimal, low, medium, high, xhigh or max");
+  const p = paths();
+  return withLock(p.dir, async () => {
+    const previous = fs.existsSync(p.effort) ? fs.readFileSync(p.effort, "utf8") : null;
+    const local = action === "reset" && scope === "all" ? { version: 1 } : clone(readEffort(p));
+    const current = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null);
+    const state = readState(p); checkOwnership(current, state);
+    const initial = await effortContext(p, { version: 1 });
+    const baseline = initial.plan;
+    let target;
+    if (scope === "model") {
+      target = effort.resolveTarget(baseline, args.model);
+      if (action === "set") {
+        const cap = baseline.effort.models.find(m => m.target === target);
+        if (!cap.supportedEfforts.includes(args.level)) fail(`model ${target} does not support requested effort; supported: ${cap.supportedEfforts.join(", ") || "none"}`);
+        local.models = { ...local.models, [target]: args.level };
+      } else if (local.models) delete local.models[target];
+    } else if (scope === "default") {
+      if (action === "set") local.default = args.level; else delete local.default;
+    }
+    if (local.models && !Object.keys(local.models).length) delete local.models;
+    const { cfg, sw, plan, capabilityWarning } = await effortContext(p, local);
+    // Prepare the secret-free response before writing; reporting must not turn a
+    // successful routing commit into an apparent failure with an incorrect rollback.
+    const report = { ...effortReport(plan, cfg, local, sw, current, state, target), ...(capabilityWarning ? { capabilityWarning } : {}) };
+    let result;
+    try {
+      if (previous !== null && !fs.existsSync(p.effort + ".bak-workbuddy-3p")) {
+        fs.copyFileSync(p.effort, p.effort + ".bak-workbuddy-3p");
+        fs.chmodSync(p.effort + ".bak-workbuddy-3p", 0o600);
+      }
+      if (Object.keys(local).length === 1) fs.rmSync(p.effort, { force: true });
+      else writeAtomic(p.effort, JSON.stringify(local, null, 2) + "\n");
+      result = await syncUnlocked({}, p);
+    } catch (e) {
+      try {
+        if (previous === null) fs.rmSync(p.effort, { force: true }); else writeAtomic(p.effort, previous);
+      } catch { fail("effort update failed and preferences rollback incomplete; restore the backup"); }
+      recordError(p, e); throw e;
+    }
+    // Commit has succeeded. A stale diagnostic cleanup failure is not a routing
+    // failure and must never roll just the preferences back after that commit.
+    let cleanupWarning;
+    try { fs.rmSync(p.lastError, { force: true }); } catch { cleanupWarning = "routing committed; stale error record could not be cleared"; }
+    for (const m of report.models) delete m.onDiskEffort;
+    const requiresModelReselection = sw.mode !== "official" || result.changed === true;
+    return { ...report, changed: result.changed, preferencesChanged: previous !== (Object.keys(local).length === 1 ? null : JSON.stringify(local, null, 2) + "\n"), routingWarnings: result.warnings || [],
+      ...(cleanupWarning ? { cleanupWarning } : {}), deferred: sw.mode === "official", requiresModelReselection,
+      note: report.note + (requiresModelReselection ? " After the host reloads, reselect the model before the next message." : " Official routing is unchanged; no model reselection is required for this deferred preference.") + " Reset removes local overrides and falls back to config/preset defaults." };
+  });
+}
 
 // ---------- api keys ----------
 function keyFromFile(p) {
@@ -258,7 +377,7 @@ function parseTarget(t, cfg, officialId, warnings) {
 }
 
 // ---------- plan ----------
-async function buildPlan(cfg, dir, prev) {
+async function buildPlan(cfg, dir, prev, opts = {}) {
   validateConfig(cfg);
   const names = Object.keys(cfg.providers);
   cfg.default = cfg.default || names[0];
@@ -270,7 +389,8 @@ async function buildPlan(cfg, dir, prev) {
     if (!baseUrl) fail(`provider ${n}: baseUrl missing`);
     const url = chatUrl(baseUrl, n, p.allowInsecureHttp === true);
     const prevKey = prev.providers?.[n]?.url === url ? prev.keys[n] || "" : "";
-    P[n] = { ...p, name: n, preset, url, label: p.label || preset?.label || n, ...(await resolveKey(n, p, n === cfg.default, dir, prevKey)) };
+    P[n] = { ...p, name: n, preset, url, label: p.label || preset?.label || n,
+      ...(opts.metadataOnly ? { key: "", source: "not resolved" } : await resolveKey(n, p, n === cfg.default, dir, prevKey)) };
   }
 
   const mode = cfg.mode || "same-name";
@@ -293,16 +413,16 @@ async function buildPlan(cfg, dir, prev) {
   const entries = new Map(), routed = {}, owner = new Map(), extra = [];
   const add = (provider, model, alias) => {
     const p = P[provider];
-    if (!p.key) { warnings.push(`provider ${provider}: no API key; ${alias || model} not added`); return false; }
+    if (!p.key && !opts.metadataOnly) { warnings.push(`provider ${provider}: no API key; ${alias || model} not added`); return false; }
     const own = owner.get(model);
     if (own && own !== provider) { warnings.push(`model id ${model} already belongs to provider ${own}; ${alias || model} via ${provider} skipped`); return false; }
     let e = entries.get(model);
     if (!e) {
-      const pm = { ...(p.preset?.models?.[model] || {}), ...(p.models?.[model] || {}), ...(cfg.models?.[`${provider}:${model}`] || {}) };
+      const pm = effort.mergeModel(p.preset?.models?.[model], p.models?.[model], cfg.models?.[`${provider}:${model}`]);
       const tpl = clone(p.preset?.templates?.[pm.template] || p.defaults || cfg.defaults ||
         { maxInputTokens: 128000, maxOutputTokens: 32768, supportsToolCall: true, supportsImages: false, supportsReasoning: false });
       delete pm.template;
-      e = { ...tpl, ...pm, id: model, name: `${p.label} / ${model}`, url: p.url, apiKey: p.key, aliases: [] };
+      e = { ...effort.mergeModel(tpl, pm), id: model, name: `${p.label} / ${model}`, url: p.url, apiKey: p.key, aliases: [] };
       entries.set(model, e); owner.set(model, provider);
     }
     if (alias) { routed[alias] = { provider, model, label: `${p.label} / ${model}` }; if (alias !== model && !e.aliases.includes(alias)) e.aliases.push(alias); }
@@ -319,7 +439,10 @@ async function buildPlan(cfg, dir, prev) {
 
   const hideOfficial = new Set(Object.keys(routed));                 // only official ids that were actually routed
   const keep = [...new Set([...(OFFICIAL.keepOfficial || []), ...(OFFICIAL.routable || []), ...keepOfficial])].filter(id => !hideOfficial.has(id));
-  return { models: [...entries.values()], owner, routed, extra, keep, hideOfficial: [...hideOfficial], warnings, providers: P, mode };
+  const models = [...entries.values()];
+  const local = opts.preferences ?? readEffort(paths(dir));
+  const appliedEffort = effort.applyEfforts(models, owner, local, cfg.effort || {});
+  return { models, owner, routed, extra, keep, hideOfficial: [...hideOfficial], warnings, providers: P, mode, effort: appliedEffort };
 }
 
 function publicSummary(plan) {
@@ -327,6 +450,7 @@ function publicSummary(plan) {
     providers: Object.values(plan.providers).map(p => ({ name: p.name, host: new URL(p.url).host, key: p.source })),
     routed: Object.fromEntries(Object.entries(plan.routed).map(([k, v]) => [k, v.label])),
     extra: plan.extra, keptOfficial: plan.keep.length, warnings: plan.warnings,
+    effort: plan.effort,
   };
 }
 
@@ -549,13 +673,37 @@ async function doctor() {
   return { ok: res.every(r => r.ok), warnings: plan.warnings, results: res };
 }
 
-module.exports = { sync, uninstall, doctor, status, setSwitch, ConfigError };
+module.exports = { sync, uninstall, doctor, status, setSwitch, effortStatus, setEffort, ConfigError };
 
 if (require.main === module) {
   const a = process.argv.slice(2), quiet = a.includes("--quiet");
   const val = (flag) => { const i = a.indexOf(flag); return i >= 0 ? a[i + 1] : undefined; };
+  const effortFlags = ["--effort-status", "--effort-reset", "--effort"].filter(f => a.includes(f));
+  // Reject the entire effort argv before any I/O. A misspelled --model must
+  // never silently widen a single-model operation into a sandbox default.
+  let badEffortArgs = false;
+  if (effortFlags.length) {
+    const allowed = new Set([effortFlags[0], "--model", "--quiet"]);
+    if (effortFlags[0] === "--effort-reset") allowed.add("--all");
+    const seen = new Set();
+    badEffortArgs = effortFlags.length !== 1;
+    for (let i = 0; i < a.length && !badEffortArgs; i++) {
+      const flag = a[i];
+      if (!allowed.has(flag) || seen.has(flag)) { badEffortArgs = true; break; }
+      seen.add(flag);
+      if (flag === "--effort" || flag === "--model") {
+        const value = a[++i];
+        if (!value || value.startsWith("-")) badEffortArgs = true;
+      }
+    }
+    if (seen.has("--all") && seen.has("--model")) badEffortArgs = true;
+  }
   let run;
-  if (a.includes("--uninstall")) run = Promise.resolve().then(uninstall);
+  if (badEffortArgs) run = Promise.reject(new ConfigError("invalid or incomplete effort CLI arguments"));
+  else if (a.includes("--effort-status")) run = effortStatus({ model: val("--model") });
+  else if (a.includes("--effort-reset")) run = setEffort({ action: "reset", scope: a.includes("--all") ? "all" : val("--model") ? "model" : "default", model: val("--model") });
+  else if (a.includes("--effort")) run = setEffort({ action: "set", level: val("--effort"), model: val("--model") });
+  else if (a.includes("--uninstall")) run = Promise.resolve().then(uninstall);
   else if (a.includes("--doctor")) run = doctor();
   else if (a.includes("--status")) run = Promise.resolve().then(status);
   else if (a.includes("--official")) run = setSwitch("official");
@@ -563,5 +711,5 @@ if (require.main === module) {
   else if (a.includes("--switch")) run = setSwitch(val("--switch") === "clear" ? "" : val("--switch"));
   else run = sync({ dryRun: a.includes("--dry-run") }).then(r => { if (r.plan) delete r.plan; return r; });
   run.then(r => { if (!quiet) console.log(JSON.stringify(r, null, 2)); },
-           e => { console.error(JSON.stringify({ ok: false, error: String(e && e.message || e) })); process.exitCode = quiet ? 0 : 1; });
+           e => { console.error(JSON.stringify({ ok: false, error: String(e && e.message || e) })); process.exitCode = effortFlags.length ? 1 : quiet ? 0 : 1; });
 }
