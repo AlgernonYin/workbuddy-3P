@@ -46,12 +46,46 @@ test("incomplete/conflicting CLI effort options never perform a broader mutation
   const run = args => spawnSync(process.execPath, [script, ...args], { env: f.env, encoding: "utf8" });
   assert.equal(run(["--effort", "low"]).status, 0);
   const before = fs.readFileSync(path.join(f.dir, "workbuddy-3p.effort.json"), "utf8");
+  const modelsBefore = fs.readFileSync(path.join(f.dir, "models.json"), "utf8");
   for (const args of [["--effort-reset", "--model"], ["--effort", "--model", "p:m"],
     ["--effort", "high", "--official"], ["--effort-status", "--effort", "high"],
-    ["--effort-reset", "--all", "--model", "p:m"]]) {
+    ["--effort-reset", "--all", "--model", "p:m"],
+    ["--effort", "high", "--modle", "p:m"], ["--effort-reset", "--modle", "p:m"],
+    ["--effort", "high", "p:m"], ["--effort", "high", "--model", "p:m", "--model", "p:m"],
+    ["--effort", "high", "--effort", "low"], ["--effort-status", "--unknown"],
+    ["--effort-status", "--effort-status"], ["--effort-reset", "--all", "--all"],
+    ["--effort", "high", "--unknown", "--quiet"], ["--effort-status", "--all"]]) {
     assert.notEqual(run(args).status, 0);
     assert.equal(fs.readFileSync(path.join(f.dir, "workbuddy-3p.effort.json"), "utf8"), before);
+    assert.equal(fs.readFileSync(path.join(f.dir, "models.json"), "utf8"), modelsBefore);
   }
+  const quiet = run(["--effort", "high", "--model", "p:m", "--quiet"]);
+  assert.equal(quiet.status, 0, quiet.stderr);
+  assert.equal(quiet.stdout, "");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir, "workbuddy-3p.effort.json"), "utf8")).models["p:m"], "high");
+});
+
+test("official override clearing stale managed routes still requires model reselection", t => {
+  const f = fixture(t);
+  const run = (args, env = f.env) => spawnSync(process.execPath, [script, ...args], { env, encoding: "utf8" });
+  assert.equal(run([]).status, 0);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(f.dir, "models.json"), "utf8")).models.length > 0);
+  const env = { ...f.env, WB3P_ENABLED: "official" };
+  const p = run(["--effort", "high"], env);
+  assert.equal(p.status, 0, p.stderr);
+  const r = JSON.parse(p.stdout);
+  assert.equal(r.deferred, true);
+  assert.equal(r.changed, true);
+  assert.equal(r.requiresModelReselection, true);
+  assert.match(r.note, /reselect the model/);
+  const models = fs.existsSync(path.join(f.dir, "models.json")) ? JSON.parse(fs.readFileSync(path.join(f.dir, "models.json"), "utf8")).models : [];
+  assert.equal(models.length, 0);
+  const again = run(["--effort", "low"], env);
+  assert.equal(again.status, 0, again.stderr);
+  const unchanged = JSON.parse(again.stdout);
+  assert.equal(unchanged.changed, false);
+  assert.equal(unchanged.requiresModelReselection, false);
+  assert.doesNotMatch(unchanged.note, /reselect the model/);
 });
 
 test("a routing I/O failure rolls preferences and model defaults back together", t => {
