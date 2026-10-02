@@ -30,6 +30,20 @@ function fixture(t) {
     // Only kill identities created by this fixture, never scan arbitrary PIDs.
     try { const r = reg(); if (r.pid > 0) pids.add(r.pid); } catch {}
     for (const pid of pids) { try { process.kill(pid); } catch {} }
+    // SIGTERM invokes asynchronous fail-closed teardown on Linux. Removing the
+    // fixture before its routing lock/registry cleanup finishes causes ENOTEMPTY.
+    for (const pid of pids) {
+      const deadline = Date.now() + 5000;
+      for (;;) {
+        try { process.kill(pid, 0); } catch (e) { if (e.code === "ESRCH") break; throw e; }
+        if (process.platform === "linux") {
+          try { if (fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")")[1].trim().startsWith("Z")) break; }
+          catch (e) { if (e.code === "ENOENT") break; throw e; }
+        }
+        if (Date.now() > deadline) throw Error("fixture daemon did not stop; preserving fixture directory");
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+    }
     await new Promise(resolve => upstream.close(resolve));
     fs.rmSync(dir, { recursive: true, force: true });
   });
