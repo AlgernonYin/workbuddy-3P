@@ -192,7 +192,9 @@ module.exports = function create(core) {
     catch { return { ok: true, committed: true, stateUnavailable: true, backup: backupDir,
       note: "Settings committed but readback failed; do not automatically retry. Reopen status before further edits." }; }
     return { ...view, committed: true, backup: backupDir, changed: result.changed, requiresModelReselection: sw.mode !== "official" || result.changed === true,
-      requiresHostRefresh: sw.mode !== "official", deferred: sw.mode === "official", ...(cleanupWarning ? { cleanupWarning } : {}) };
+      requiresHostRefresh: sw.mode !== "official" || result.changed === true || result.fallbackUnavailable === true, deferred: sw.mode === "official",
+      ...Object.fromEntries(["officialCatalogFallback", "officialCatalogConflicts", "catalogWarning", "fallbackUnavailable"]
+        .filter(k => result[k] !== undefined).map(k => [k, result[k]])), ...(cleanupWarning ? { cleanupWarning } : {}) };
   }
   return { viewUnlocked, applyUnlocked };
 };

@@ -4,7 +4,7 @@
 "use strict";
 const lib = require("./sync-models.cjs");
 const panel = require("./settings-panel.cjs");
-const VERSION = "2.5.0";
+const VERSION = "2.5.1";
 const errOut = (e) => ({ ok: false, error: String(e && e.message || e) });
 let status = { ok: false, reason: "pending" };
 const ready = lib.sync().catch(errOut).then(s => { status = s; });
@@ -41,7 +41,7 @@ const TOOLS = [
       model: { type: "string", description: "provider:upstream-model from status, or an unambiguous upstream id/official alias" }
     } } },
   { name: "models_status", description: "Show configured mode, models.json routing state and errors. This is disk configuration only, not proof of live request routing (runtimeVerified=false). Unknown state is not off. Never shows keys.", inputSchema: noArgs },
-  { name: "models_switch", description: "Configure official/third-party/default mode for this sandbox. IMPORTANT: the host can retain the previous model ID after switching. Tell the user to reselect a model before the next message (if unchanged, select Hy3 then the target). Prefer a non-routed official model such as default Hy3 while switching. This tool cannot change the host's active selection.",
+  { name: "models_switch", description: "Configure official/third-party/default mode for this sandbox. The host can retain the previous model ID: use a non-routed official model (for example Hy4 preview) while switching, then reselect the target after the host reloads. An official compatibility catalog may be generated with reversible ownership; report catalogWarning/officialCatalogConflicts/fallbackUnavailable if present. This tool cannot change the active selection; runtimeVerified=false is not traffic proof.",
     inputSchema: { type: "object", properties: { mode: { type: "string", enum: ["official", "third-party", "default"] } }, required: ["mode"] } },
   { name: "models_resync", description: "Re-read the workbuddy-3p config and rewrite ~/.codebuddy/models.json", inputSchema: noArgs },
   { name: "models_doctor", description: "In third-party mode send one billable tiny request per configured model; report HTTP status only, not runtime routing proof. Skip all requests in official mode.", inputSchema: noArgs },
@@ -72,7 +72,7 @@ async function callTool(name, args = {}) {
     if (!["official", "third-party", "default"].includes(args.mode)) throw new Error("mode must be official, third-party or default");
     status = await lib.setSwitch(args.mode === "default" ? "" : args.mode).catch(errOut);
     return { ...clean(status), requiresModelReselection: true,
-      note: "Before the next message, reselect the target in the model picker; if it appears unchanged, select Hy3 then the target. The host may retain a removed custom-local ID and report no endpoint until reselected. This tool cannot update the active selection. New sandboxes follow account defaults; this is not a runtime traffic check." };
+        note: "Before the next message, use a non-routed official model (for example Hy4 preview), then reselect the target after the host reloads. Some hosts retain a removed custom-local ID; page reload alone is not proof of rebinding. Report any catalog warning or user-model conflict. This tool cannot update the active selection. New sandboxes follow account defaults; this is not a runtime traffic check." };
   }
   if (name === "models_resync") { status = await lib.sync().catch(errOut); return clean(status); }
   if (name === "models_doctor") return lib.doctor().catch(errOut);

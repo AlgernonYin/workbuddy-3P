@@ -315,7 +315,7 @@ test("6. sync is idempotent and backs up only an existing models.json", () => {
   }
 });
 
-test("7. enabled:false behaves like uninstall", () => {
+test("7. enabled:false clears routes and retains reversible official catalog ownership", () => {
   const cfg = {
     default: "main",
     providers: { main: { baseUrl: "https://managed.example.invalid/v1", apiKey: KEY } },
@@ -335,8 +335,11 @@ test("7. enabled:false behaves like uninstall", () => {
     runOk(controlDir, {}, ["--uninstall"]);
 
     assert.equal(disabledResult.disabled, true, "disabled sync did not report disabled");
-    assert.deepEqual(readJson(modelsPath(disabledDir)), readJson(modelsPath(controlDir)), "disabled sync differs from uninstall");
-    assert.ok(!fs.existsSync(statePath(disabledDir)), "disabled sync did not remove state file");
+    assert.deepEqual(readJson(modelsPath(disabledDir)).models, readJson(modelsPath(controlDir)).models, "disabled sync left managed models");
+    assert.equal(readJson(statePath(disabledDir)).officialCatalogFallback, true);
+    assert.deepEqual(readJson(statePath(disabledDir)).providers, {}, "official catalog ownership must not retain credentials");
+    runOk(disabledDir, {}, ["--uninstall"]);
+    assert.deepEqual(readJson(modelsPath(disabledDir)), readJson(modelsPath(controlDir)), "uninstall did not remove catalog-only ownership");
   } finally {
     rmDir(disabledDir);
     rmDir(controlDir);

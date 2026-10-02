@@ -4,7 +4,7 @@
 const fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn } = require("child_process");
 const SCHEMA = 1;
 const digest = s => crypto.createHash("sha256").update(s).digest("hex");
-const codeHash = () => digest(["parameter-runtime.cjs", "parameter-proxy.cjs", "sync-models.cjs", "parameters.cjs"]
+const codeHash = () => digest(["parameter-runtime.cjs", "parameter-proxy.cjs", "loopback-ports.cjs", "sync-models.cjs", "parameters.cjs"]
   .map(n => fs.readFileSync(path.join(__dirname, n), "utf8").replace(/\r\n/g, "\n")).join("\0"));
 const hmac = (secret, value) => crypto.createHmac("sha256", secret).update(value).digest("base64url");
 const same = (a, b) => typeof a === "string" && typeof b === "string" && a.length === b.length &&

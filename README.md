@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 2.5.0
+**Version:** 2.5.1
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets the model picker use an OpenAI-compatible API that you control. The web and mobile clients share the same cloud sandbox mechanism, so no client or web page changes are required.
 
@@ -162,7 +162,9 @@ Switching to `official` removes plugin-written models and restores hidden offici
 
 The switch changes routing configuration, not the cloud session's in-memory selected model. Live testing on 2026-09-30 reproduced `Custom model custom-local:... has no endpoint url configured` after switching to official without changing the selection. This is not fixed by writing the config again.
 
-For web and mobile: select a non-routed official model (default `Hy3`), call `models_switch` or a slash command, then select the desired model before sending another message. If the label is already selected, choose `Hy3` and then the target to force a fresh selection. A new sandbox uses account defaults, not the previous sandbox's switch. The plugin reports `requiresModelReselection: true`; it does not silently edit the web page or claim a seamless hot switch.
+For web and mobile: select a non-routed official model (for example `Hy4 preview`), call `models_switch` or a slash command, then select the desired model before sending another message. If the label is already selected, choose a non-routed official model and then the target to force a fresh selection. A new sandbox uses account defaults, not the previous sandbox's switch. The plugin reports `requiresModelReselection: true`; it does not edit the web page or claim a seamless hot switch.
+
+**2.5.1 official-catalog compatibility:** A 2026-10-03 cloud Native 2.155.0 test retained a stale `custom-local` binding after deleting `availableModels`, even after page reload/reselection. An explicit official list restored a real GLM-5.1 official request on the same host. When withdrawing managed routes from an originally unfiltered configuration, the plugin materializes a bundled compatibility fallback and tracks its exact projection in credential-free ownership state. This is not the host's live complete catalog. Cleanup restores field absence only if that projection is unchanged. After external additions, deletions or reordering, uninstall preserves the entire current field; directly enabling third-party mode refuses until ownership is cleaned/restored. Existing user allowlists, including `[]`, keep their meaning; same-ID user-model conflicts produce warnings, not overwrites. Missing/invalid catalogs never create an empty deny-all or pretend official rebinding succeeded. See the [compatibility contract](docs/official-switch-compatibility.md).
 
 On a brand-new sandbox, plugin/profile initialization may finish after model selection. Reselect the target once the plugin is ready; do not assume the very first startup request used your API. Mobile shares the cloud configuration, but has not been device-tested.
 

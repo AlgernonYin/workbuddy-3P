@@ -481,10 +481,16 @@ function readState(p) {
         (v.apiKey === undefined || typeof v.apiKey === "string" && v.apiKey.length > 0 && v.apiKey.length < 16384)) ||
       (s.parameterProxy !== undefined && (!isObj(s.parameterProxy) || !/^[a-f0-9]{64}$/.test(s.parameterProxy.serverId) ||
         !Number.isInteger(s.parameterProxy.port) || s.parameterProxy.port < 1 || s.parameterProxy.port > 65535)) ||
-      (s.hadAllowlist !== undefined && typeof s.hadAllowlist !== "boolean"))
+      (s.hadAllowlist !== undefined && typeof s.hadAllowlist !== "boolean") ||
+      (s.officialCatalogIds !== undefined && !strings(s.officialCatalogIds)) ||
+      (s.officialCatalogFallback !== undefined && typeof s.officialCatalogFallback !== "boolean") ||
+      (s.officialCatalogFallback === true && (s.managed.length || s.hidden.length || s.displaced.length ||
+        s.hadAllowlist !== false || Object.keys(s.providers).length || s.parameterProxy || !s.allow.length)))
     fail("invalid ownership state; restore a backup before changing routing");
   return { managed: s.managed || [], allow: s.allow || [], hidden: s.hidden || [], displaced: s.displaced || [], providers: s.providers || {}, hadAllowlist: s.hadAllowlist,
-    ...(s.parameterProxy ? { parameterProxy: s.parameterProxy } : {}) };
+    ...(s.parameterProxy ? { parameterProxy: s.parameterProxy } : {}),
+    ...(s.officialCatalogIds ? { officialCatalogIds: s.officialCatalogIds } : {}),
+    ...(s.officialCatalogFallback ? { officialCatalogFallback: true } : {}) };
 }
 function prevKeys(cur, state) {
   const keys = {};
@@ -505,14 +511,50 @@ function stripManaged(cur, state) {
   const out = { ...cur, models: (cur.models || []).filter(m => !(m && managed.has(m.id))) };
   delete out.workbuddy3pManaged;
   for (const m of state.displaced) if (!out.models.some(x => x && x.id === m.id)) out.models.push(m);
+  // A changed synthetic list is an observable new user intent. Preserve the
+  // entire current field, including order, rather than deleting shared IDs.
+  if (officialCatalogEdited(cur, state)) return out;
   if (Array.isArray(cur.availableModels) || state.hidden.length) {
     const list = (cur.availableModels || []).filter(x => !allow.has(x));
     for (const id of state.hidden) if (!list.includes(id)) list.push(id);
     out.availableModels = list;
     // An empty allowlist would hide every model; only keep one if the user explicitly had it.
-    if (!list.length && state.hadAllowlist !== true) delete out.availableModels;
+    if (!list.length && state.hadAllowlist !== true && !state.missing) delete out.availableModels;
   }
   return out;
+}
+
+function officialCatalogEdited(cur, state) {
+  return state.officialCatalogFallback === true && JSON.stringify(cur.availableModels) !== JSON.stringify(state.allow);
+}
+
+function restoreOfficialCatalog(cur, state) {
+  const out = stripManaged(cur, state);
+  const edited = officialCatalogEdited(cur, state);
+  const ids = [...(Array.isArray(OFFICIAL.keepOfficial) ? OFFICIAL.keepOfficial : []), ...(Array.isArray(OFFICIAL.routable) ? OFFICIAL.routable : [])];
+  const officialCatalogIds = [...new Set([...ids, ...(state.officialCatalogIds || []),
+    ...(cur.models || []).filter(m => state.managed.includes(m.id)).flatMap(m => m.aliases || [])])]
+    .filter(id => typeof id === "string" && id.length && !id.startsWith("custom-local:"));
+  const officialCatalogConflicts = out.models.map(m => m.id).filter(id => officialCatalogIds.includes(id));
+  const warning = [edited ? "Official compatibility catalog externally edited; preserving the current allowlist as user configuration." : "",
+    officialCatalogConflicts.length ? "Restored user models shadow matching official IDs; official binding for these IDs is not verified." : ""].filter(Boolean).join(" ");
+  // Removing availableModels can leave old hosts' custom-slot catalog intact.
+  // An explicit official catalog triggered a real rebind on cloud Native 2.155.
+  // Only synthesize it when the original user configuration had no allowlist.
+  if (Array.isArray(out.availableModels) || !(state.managed.length || state.officialCatalogFallback))
+    return { out, ownership: null, fallback: false, officialCatalogConflicts, ...(warning ? { catalogWarning: warning } : {}) };
+  if (!ids.length || !ids.every(id => typeof id === "string" && id.length && !id.startsWith("custom-local:")))
+    return { out, ownership: null, fallback: false, fallbackUnavailable: true,
+      catalogWarning: "Bundled official compatibility catalog unavailable; routing disabled but host catalog refresh is still required." };
+  const allow = [...new Set([...officialCatalogIds, ...out.models.map(m => "custom-local:" + m.id)])];
+  out.availableModels = allow;
+  out.workbuddy3pManaged = { version: 1, ids: [] };
+  // Keep catalog-only ownership (no provider credentials) so later routing or
+  // uninstall restores absence, instead of adopting generated IDs as user data.
+  const ownership = { managed: [], allow, hidden: [], displaced: [], providers: {},
+    hadAllowlist: false, officialCatalogFallback: true, officialCatalogIds };
+  return { out, ownership, fallback: true, officialCatalogConflicts,
+    ...(warning ? { catalogWarning: warning } : {}) };
 }
 
 function writeModels(p, before, text) {
@@ -547,6 +589,8 @@ function parseModels(text) {
   return cur;
 }
 function checkOwnership(cur, state) {
+  if (state.officialCatalogFallback && !cur.workbuddy3pManaged)
+    fail("official catalog ownership marker missing; restore a backup before changing routing");
   if (cur.workbuddy3pManaged) {
     const marker = cur.workbuddy3pManaged;
     if (state.missing) fail("ownership state missing; routing state unknown; restore a backup");
@@ -562,6 +606,10 @@ function recordError(p, e) {
 
 // Roll back ordinary I/O failures. This is not crash-atomic across two files.
 function commitRouting(p, before, out, state) {
+  // Check after async credential/config planning, outside rollback: an external
+  // edit before commit is not our write and must never be restored over.
+  if ((fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null) !== before)
+    fail("models.json changed before routing commit; reopen status before retrying");
   const previousState = fs.existsSync(p.state) ? fs.readFileSync(p.state, "utf8") : null;
   const text = JSON.stringify(out, null, 2) + "\n";
   try {
@@ -590,15 +638,22 @@ async function syncUnlocked(opts, p) {
   const { cfg, from } = override.mode === "official" ? { cfg: null, from: "not loaded (official override)" } : loadConfig(p.dir);
   const sw = override.mode === "official" ? override : resolveSwitch(p.dir, cfg);
   if (from !== "none" && override.mode !== "official") validateConfig(cfg);
+  if (sw.mode !== "official" && officialCatalogEdited(cur, state))
+    fail("Official compatibility catalog externally edited; restore its snapshot or clean routing ownership with --uninstall before enabling third-party models");
   const base = { config: from, switch: sw.mode, switchFrom: sw.from, disabled: sw.mode === "official" };
 
   if (!cfg || sw.mode === "official") {
     const reason = sw.mode === "official" ? "switched to official" : "no provider configured (set BASE_URL or PRESET)";
-    if (opts.dryRun || !state.managed.length && !state.hidden.length && !state.displaced.length)
+    if (opts.dryRun || !state.managed.length && !state.hidden.length && !state.displaced.length && !state.officialCatalogFallback)
       return { ok: true, ...base, active: false, reason, changed: false };
-    const out = stripManaged(cur, state);
-    const changed = commitRouting(p, before, out, null);
-    return { ok: true, ...base, active: false, reason, changed };
+    const restored = sw.mode === "official" ? restoreOfficialCatalog(cur, state)
+      : { out: stripManaged(cur, state), ownership: null, fallback: false };
+    const changed = commitRouting(p, before, restored.out, restored.ownership);
+    return { ok: true, ...base, active: false, reason, changed,
+      officialCatalogFallback: restored.fallback, requiresHostRefresh: changed || restored.fallbackUnavailable === true, runtimeVerified: false,
+      ...(restored.catalogWarning ? { catalogWarning: restored.catalogWarning } : {}),
+      ...(restored.fallbackUnavailable ? { fallbackUnavailable: true } : {}),
+      ...(restored.officialCatalogConflicts?.length ? { officialCatalogConflicts: restored.officialCatalogConflicts } : {}) };
   }
 
   const params = parameters.read(p);
@@ -636,7 +691,7 @@ async function syncUnlocked(opts, p) {
     ...(adapter ? { apiKey: plan.providers[prov].key } : {}) }).modelIds.push(id);
   const newState = plan.models.length ? {
     managed: [...mineIds], allow: allow.filter(x => !keptUser.includes(x)), hidden, displaced, providers: providersState,
-    hadAllowlist, updatedAt: new Date().toISOString(),
+    hadAllowlist, officialCatalogIds: [...new Set([...plan.keep, ...Object.keys(plan.routed)])], updatedAt: new Date().toISOString(),
     ...(adapter ? { parameterProxy: { serverId: adapter.serverId, port: adapter.port } } : {}),
   } : null;
   const changed = commitRouting(p, before, out, newState);
@@ -662,7 +717,8 @@ function uninstall() {
     if (before === null || !fs.existsSync(p.state)) return { ok: true, changed: false };
     const out = stripManaged(cur, state);
     const changed = commitRouting(p, before, out, null);
-    return { ok: true, changed, remainingModels: out.models.length };
+    return { ok: true, changed, remainingModels: out.models.length,
+      ...(officialCatalogEdited(cur, state) ? { catalogWarning: "Official compatibility catalog externally edited; preserving the current allowlist as user configuration." } : {}) };
   });
 }
 

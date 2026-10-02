@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const http = require("node:http");
 const path = require("node:path");
+const { listenFetchSafe } = require("../plugins/custom-api-models/scripts/loopback-ports.cjs");
 
 const { createParameterProxy, forceParameters } = require(path.join(
   __dirname,
@@ -23,19 +24,7 @@ const CLIENT_KEY = "fake-client-key-never-forward-this";
 const hmac = (value) => crypto.createHmac("sha256", SECRET).update(value).digest("base64url");
 
 function listen(server) {
-  return new Promise((resolve, reject) => {
-    const onError = (error) => {
-      server.removeListener("listening", onListening);
-      reject(error);
-    };
-    const onListening = () => {
-      server.removeListener("error", onError);
-      resolve(server.address().port);
-    };
-    server.once("error", onError);
-    server.once("listening", onListening);
-    server.listen(0, "127.0.0.1");
-  });
+  return listenFetchSafe(server);
 }
 
 function closeServer(server) {
@@ -623,7 +612,7 @@ test("per-request size limit and concurrency gate reject before upstream", async
   assert.equal(upstreamHits, 4);
 });
 
-test("close aborts in-flight requests and releases the loopback server", async (t) => {
+test("close aborts in-flight requests and releases the loopback server", { timeout: 5000 }, async (t) => {
   let upstreamClosed = false;
   const upstream = http.createServer(async (req, res) => {
     res.once("close", () => { upstreamClosed = true; });
@@ -655,7 +644,15 @@ test("close aborts in-flight requests and releases the loopback server", async (
   });
   const reader = response.body.getReader(); await reader.read();
   await proxy.close();
-  await assert.rejects(reader.read());
+  // TCP may have buffered another fragment before close. Drain it, accepting
+  // either aborted reads or EOF, but require a bounded, actually ended stream.
+  let ended = false;
+  for (let i = 0; i < 8; i++) {
+    let next; try { next = await reader.read(); } catch { ended = true; break; }
+    if (next.done) { ended = true; break; }
+    assert.ok(next.value.byteLength < 1024);
+  }
+  assert.equal(ended, true);
   await waitFor(() => upstreamClosed);
   assert.equal(upstreamClosed, true);
 

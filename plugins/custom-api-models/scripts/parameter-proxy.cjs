@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const http = require("node:http");
 const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
+const { listenFetchSafe } = require("./loopback-ports.cjs");
 
 const HOST = "127.0.0.1";
 const HEALTH_PATH = "/_wb3p/health";
@@ -456,21 +457,7 @@ async function createParameterProxy(options) {
     }
   }
 
-  await new Promise((resolve, reject) => {
-    const onError = (error) => {
-      server.removeListener("listening", onListening);
-      reject(error);
-    };
-    const onListening = () => {
-      server.removeListener("error", onError);
-      resolve();
-    };
-    server.once("error", onError);
-    server.once("listening", onListening);
-    server.listen(0, HOST);
-  });
-
-  const port = server.address().port;
+  const port = await listenFetchSafe(server);
   const urlFor = (modelId) => proxyUrl(port, modelId);
 
   return {

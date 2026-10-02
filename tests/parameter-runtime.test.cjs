@@ -88,7 +88,7 @@ test("multiple actual MCP lifetimes share one host daemon; one EOF cannot break 
       child.once("error", reject);
     });
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
-    assert.equal((await reply).result.serverInfo.version, "2.5.0"); return child;
+    assert.equal((await reply).result.serverInfo.version, "2.5.1"); return child;
   };
   const [a, b] = await Promise.all([open(), open()]); assert.equal(f.reg().pid, first.pid);
   const exit = new Promise(resolve => a.once("exit", resolve)); a.stdin.end(); await exit;
