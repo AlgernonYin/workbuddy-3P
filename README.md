@@ -2,11 +2,27 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 2.3.0
+**Version:** 2.4.0
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets the model picker use an OpenAI-compatible API that you control. The web and mobile clients share the same cloud sandbox mechanism, so no client or web page changes are required.
 
 The plugin writes only the model configuration it manages. Existing user models whose IDs are not managed by the plugin are left in place.
+
+## Settings entry point (2.4)
+
+Ask **“Open WorkBuddy 3P settings”** or use `/models-settings`. On MCP Apps hosts the interactive panel lets you select a model, adjust its supported reasoning levels/input limit, switch official/third-party mode, and edit providers, extra models and routes. “Highest for all” chooses each model's highest valid level; it does not force the literal `max` everywhere. Input limits can be reduced/reset, not expanded beyond declared upstream capacity.
+
+`models_settings` supports `status`, `panel` and revision-guarded `apply`. Direct saving uses the standard MCP Apps host bridge: no webpage patching or public HTTP listener. Hosts without MCP Apps can use a chat question-tool wizard. The standalone HTML artifact is a **draft editor**: send its secret-free generated instruction back to the original chat to apply it. Preview/clipboard success is not a save receipt. An isolated browser fixture has verified bridge saves and mobile-size layout; official cloud/new-session and physical-phone acceptance must be verified separately, not inferred from host source support.
+
+Updates use the existing routing lock, private backups and rollback for ordinary I/O failures. Stale revisions reject; detected external changes are not overwritten during rollback. All writers should honor the same lock: a non-cooperating external editor can still race between the final comparison and atomic replacement. This is neither an OS-level compare-and-swap guarantee nor a multi-file crash-atomic transaction. Editing a private profile updates only its local sandbox copy, preserving the envelope and avoiding a credential-shadowing local config. Account upload/synchronization is not automatic; upload an updated private profile for future sandboxes.
+
+The panel never displays or accepts API key values. New provider forms use credential environment-variable names; keys remain in private runtime files/environment/account profiles. Changing an endpoint requires a new reference or explicit consent to reuse existing credentials.
+
+See the [per-model capability matrix](docs/model-capabilities.md) and [official window audit](docs/model-windows.md). Live Bailian checks on 2026-10-02 show that GLM-5/5.1 reject `max`; their highest supported level is `xhigh`, despite generalized documentation. Kimi K3 now exposes `low/high/max`. Overstated capacity on ten older models has also been corrected. Thinking-off is exposed only on verified host paths; Kimi K3, DeepSeek V4.1 Flash and MiniMax M3 do not expose unsupported native toggles. `thinking_budget` and `ultracode` are out of scope.
+
+**Activation limits:** effort levels are model defaults; native user/session effort overrides still win on reasoning-enabled entries. `off` disables reasoning capability for that custom slot without changing global settings; re-enable/reset it in the plugin to restore reasoning. A stale host catalog may require catalog refresh and model reselection; saving, resync or page reload alone is not runtime proof. Input limits persist in `workbuddy-3p.context.json` and change host model metadata; there is no universal provider `context_window` request parameter. Revisions use a process-local random-key HMAC, not a deterministic credential digest. Reopen old panels/drafts after MCP restart.
+
+Private backup directories/files use `700`/`600` on Linux. Windows `chmod` is not an NTFS ACL: use an account-private directory and do not sync/share backups.
 
 ## How it works
 
@@ -224,7 +240,7 @@ Preset templates also use fields such as `onlyReasoning`, `useCustomProtocol`, `
 
 ### Reasoning effort defaults
 
-Version 2.3.0 adds reasoning-effort defaults for routed models. Supported levels are `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. `off`, `ultracode`, and token budgets are not part of this feature.
+Since 2.3.0, routed models have configurable reasoning-effort defaults. Version 2.4 validates `minimal`, `low`, `medium`, `high`, `xhigh`, and `max` per model, plus `on/off` toggles on supported host paths; no model is assumed to support every value. `ultracode` and token budgets are not included.
 
 Configure defaults in the top-level `effort` object:
 

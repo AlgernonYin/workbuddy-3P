@@ -11,7 +11,7 @@ const BASE = path.resolve(__dirname, "..");
 const SCRIPT = path.join(BASE, "plugins", "custom-api-models", "scripts", "sync-models.cjs");
 const FAKE_KEY = "sk-test-effort-fake-key";
 const EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"];
-const UNSUPPORTED_LEVELS = ["off", "ultracode"];
+const UNSUPPORTED_LEVELS = ["ultracode"];
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "wb3p-effort-test-"));
@@ -472,8 +472,8 @@ test("illegal and model-unsupported effort levels reject without file changes", 
       assertFilesUnchanged(dir, beforeRejectedGlobal);
     }
 
-    let result = runApiRaw(dir, setExpression({ action: "set", scope: "default", level: "off" }));
-    assert.notEqual(result.status, 0, "API must reject off");
+    let result = runApiRaw(dir, setExpression({ action: "set", scope: "model", model: "lab:alpha", level: "off" }));
+    assert.notEqual(result.status, 0, "API must reject off for a model with no thinking toggle");
     assertFilesUnchanged(dir, beforeRejectedGlobal);
 
     for (const level of EFFORT_LEVELS) {

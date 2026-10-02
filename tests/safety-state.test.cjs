@@ -125,7 +125,7 @@ test("stdio MCP exposes truthful disk status and switching/doctor behavior", t =
   });
   assert.equal(r.status, 0, r.stderr); assert.ok(!r.stdout.includes("fake-only-canary"));
   const replies = r.stdout.trim().split("\n").map(JSON.parse);
-  assert.equal(replies[0].result.serverInfo.version, "2.3.0");
+  assert.equal(replies[0].result.serverInfo.version, "2.4.0");
   const result = id => JSON.parse(replies.find(r => r.id === id).result.content[0].text);
   assert.equal(result(2).active, false); assert.equal(result(3).skipped, true);
   assert.equal(result(2).requiresModelReselection, true); assert.match(result(2).note, /before|Before/);

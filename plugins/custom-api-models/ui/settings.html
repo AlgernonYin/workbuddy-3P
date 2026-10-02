@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>WorkBuddy 公众模型配置</title>
+  <style>
+    :root {
+      --wb-green-900: #064e3b;
+      --wb-green-700: #047857;
+      --wb-green-600: #059669;
+      --wb-green-500: #10b981;
+      --wb-green-100: #d1fae5;
+      --wb-green-50: #ecfdf5;
+      --wb-ink: #10231c;
+      --wb-muted: #60756c;
+      --wb-line: #dbe7e1;
+      --wb-card: #ffffff;
+      --wb-bg: #f4f8f6;
+      --wb-warn-bg: #fff8e7;
+      --wb-warn-line: #f1d18a;
+      --wb-error-bg: #fff1f1;
+      --wb-error-line: #f0aaaa;
+      --wb-shadow: 0 12px 32px rgba(16, 35, 28, 0.08);
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { background: var(--wb-bg); }
+    body {
+      margin: 0;
+      color: var(--wb-ink);
+      background: radial-gradient(circle at 8% 0%, rgba(16, 185, 129, 0.14), transparent 28rem), linear-gradient(180deg, #f8fcfa 0%, var(--wb-bg) 28rem);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { touch-action: manipulation; }
+    .shell { width: min(100%, 980px); margin: 0 auto; padding: 0 16px calc(112px + env(safe-area-inset-bottom)); }
+    .hero { padding: 28px 2px 18px; }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .brand-mark {
+      display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; color: #fff;
+      background: linear-gradient(145deg, var(--wb-green-500), var(--wb-green-700));
+      box-shadow: 0 8px 20px rgba(5, 150, 105, 0.28); font-weight: 800; letter-spacing: -0.04em;
+    }
+    .eyebrow { margin: 0 0 2px; color: var(--wb-green-700); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(25px, 6vw, 38px); line-height: 1.12; letter-spacing: -0.035em; }
+    .hero-copy { max-width: 720px; margin: 10px 0 0; color: var(--wb-muted); }
+    .connection {
+      display: flex; align-items: flex-start; gap: 12px; margin: 0 0 18px; padding: 14px 16px;
+      border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 6px 22px rgba(16, 35, 28, 0.05);
+    }
+    .connection-dot { width: 10px; height: 10px; flex: 0 0 auto; margin-top: 6px; border-radius: 999px; background: #94a3b8; box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.14); }
+    .connection.is-connecting .connection-dot { background: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15); }
+    .connection.is-online .connection-dot { background: var(--wb-green-500); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15); }
+    .connection.is-offline .connection-dot { background: #64748b; box-shadow: 0 0 0 4px rgba(100, 116, 139, 0.14); }
+    .connection.is-error .connection-dot { background: #dc2626; box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.14); }
+    .connection strong { display: block; margin-bottom: 2px; }
+    .connection p { margin: 0; color: var(--wb-muted); }
+    .card { margin: 0 0 16px; padding: 18px; border: 1px solid var(--wb-line); border-radius: var(--radius-lg); background: var(--wb-card); box-shadow: var(--wb-shadow); }
+    .waiting { padding: 42px 22px; text-align: center; }
+    .waiting-symbol { display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 18px; color: var(--wb-green-700); background: var(--wb-green-50); font-size: 24px; animation: breathe 1.8s ease-in-out infinite; }
+    @keyframes breathe { 0%, 100% { opacity: 0.72; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) { .waiting-symbol { animation: none; } }
+    .waiting h2 { margin: 0 0 6px; font-size: 20px; }
+    .waiting p { max-width: 560px; margin: 0 auto; color: var(--wb-muted); }
+    .section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+    .section-head h2 { margin: 0; font-size: 18px; letter-spacing: -0.015em; }
+    .section-head p { margin: 4px 0 0; color: var(--wb-muted); font-size: 13px; }
+    .mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .mode-option { position: relative; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 12px 14px; border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: #fbfdfc; cursor: pointer; transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease; }
+    .mode-option:has(input:checked) { border-color: var(--wb-green-500); background: var(--wb-green-50); box-shadow: inset 0 0 0 1px var(--wb-green-500); }
+    .mode-option input { width: 18px; height: 18px; accent-color: var(--wb-green-600); }
+    .mode-option span { font-weight: 650; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 14px; }
+    .summary-item { min-width: 0; padding: 11px 12px; border-radius: var(--radius-sm); background: #f6faf8; }
+    .summary-item dt { color: var(--wb-muted); font-size: 12px; }
+    .summary-item dd { margin: 2px 0 0; overflow-wrap: anywhere; font-weight: 650; }
+    .warning-list { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+    .warning-list li { padding: 10px 12px; border: 1px solid var(--wb-warn-line); border-radius: var(--radius-sm); background: var(--wb-warn-bg); color: #754b00; font-size: 13px; }
+    .state-note { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--wb-green-500); background: var(--wb-green-50); color: #155e45; overflow-wrap: anywhere; }
+    .list { display: grid; gap: 12px; }
+    .model-card, .provider-card, .route-card { border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: #fcfefd; overflow: hidden; }
+    .model-card > header, .provider-card > header, .route-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 13px 14px; border-bottom: 1px solid var(--wb-line); background: #f8fcfa; }
+    .model-card h3, .provider-card h3, .route-card h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+    .subtle { margin: 3px 0 0; color: var(--wb-muted); font-size: 12px; overflow-wrap: anywhere; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+    .tag { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border-radius: 999px; background: #e8f3ee; color: #315e4d; font-size: 11px; font-weight: 650; }
+    .tag.ok { background: var(--wb-green-100); color: #065f46; }
+    .tag.warn { background: #fff1c7; color: #7c5100; }
+    .card-body { padding: 14px; }
+    .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .field { min-width: 0; }
+    .field.wide { grid-column: 1 / -1; }
+    label.field-label { display: block; margin-bottom: 6px; color: #29463a; font-size: 12px; font-weight: 700; }
+    .field-help { margin: 5px 0 0; color: var(--wb-muted); font-size: 11px; overflow-wrap: anywhere; }
+    input, select, textarea { width: 100%; min-height: 44px; padding: 10px 11px; border: 1px solid #cbdcd4; border-radius: var(--radius-sm); color: var(--wb-ink); background: #fff; outline: none; transition: border-color 140ms ease, box-shadow 140ms ease; }
+    textarea { min-height: 86px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 13px; }
+    input:focus, select:focus, textarea:focus { border-color: var(--wb-green-500); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14); }
+    input:disabled, select:disabled, textarea:disabled { color: #6b7f76; background: #eef4f1; cursor: not-allowed; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 9px 14px; border: 1px solid transparent; border-radius: 11px; color: #fff; background: var(--wb-green-700); font-weight: 700; cursor: pointer; transition: transform 120ms ease, background 120ms ease, opacity 120ms ease; }
+    .button:hover:not(:disabled) { background: var(--wb-green-600); }
+    .button:active:not(:disabled) { transform: translateY(1px); }
+    .button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .button.secondary { border-color: #bcd3c8; color: #235342; background: #fff; }
+    .button.secondary:hover:not(:disabled) { background: var(--wb-green-50); }
+    .button.danger { border-color: #f0c7c7; color: #9f2424; background: #fff7f7; }
+    .button.small { min-height: 36px; padding: 7px 10px; font-size: 12px; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .toolbar .button { flex: 0 0 auto; }
+    .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .route-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 11px 12px; }
+    .route-arrow { color: var(--wb-green-700); font-weight: 800; }
+    .route-target { overflow-wrap: anywhere; font-weight: 650; }
+    .empty { padding: 18px; border: 1px dashed #c8d9d2; border-radius: var(--radius-md); color: var(--wb-muted); text-align: center; background: #fbfdfc; }
+    .notice { margin: 0 0 14px; padding: 12px 13px; border: 1px solid #bcd3c8; border-radius: var(--radius-sm); background: var(--wb-green-50); color: #145c44; overflow-wrap: anywhere; }
+    .notice.error { border-color: var(--wb-error-line); background: var(--wb-error-bg); color: #9f1c1c; }
+    .notice.info { border-color: var(--wb-warn-line); background: var(--wb-warn-bg); color: #704a00; }
+    .offline-output { min-height: 230px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 1.55; }
+    .action-dock { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(190, 211, 201, 0.9); background: rgba(248, 252, 250, 0.94); backdrop-filter: blur(14px); }
+    .action-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: min(100%, 948px); margin: 0 auto; }
+    .action-copy { min-width: 0; color: var(--wb-muted); font-size: 12px; }
+    .action-copy strong { display: block; color: var(--wb-ink); font-size: 13px; }
+    .action-inner .button { flex: 0 0 auto; }
+    @media (max-width: 700px) {
+      .shell { padding-right: 12px; padding-left: 12px; }
+      .hero { padding-top: 20px; }
+      .card { padding: 15px; border-radius: 17px; }
+      .field-grid { grid-template-columns: 1fr; }
+      .field.wide { grid-column: auto; }
+      .route-row { grid-template-columns: 1fr auto; }
+      .route-row .route-target { grid-column: 1 / 2; }
+      .route-row .button { grid-column: 2 / 3; grid-row: 1 / 3; align-self: stretch; }
+      .action-inner { align-items: stretch; flex-direction: column; }
+      .action-inner .button { width: 100%; }
+      .mode-options { grid-template-columns: 1fr; }
+      .section-head { flex-direction: column; }
+      .toolbar { align-items: stretch; }
+      .toolbar .button { width: 100%; }
+    }
+  </style>
+</head><body>
+  <div class="shell">
+    <header class="hero">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">WB</div>
+        <div>
+          <p class="eyebrow">WorkBuddy 3P</p>
+          <h1>公众模型配置</h1>
+        </div>
+      </div>
+      <p class="hero-copy">选择模型，调整思考强度和输入窗口。密钥保留在私有运行时，不会显示在面板里。</p>
+    </header>
+    <section id="connection" class="connection is-connecting" aria-live="polite">
+      <span class="connection-dot" aria-hidden="true"></span>
+      <div>
+        <strong id="connection-title">正在连接宿主</strong>
+        <p id="connection-detail">正在尝试 MCP App bridge；连接失败时会切换到离线指令模式。</p>
+      </div>
+    </section>
+    <div id="operation-status" class="notice" hidden role="status" aria-live="polite"></div>
+    <section id="waiting-panel" class="card waiting">
+      <div class="waiting-symbol" aria-hidden="true">◎</div>
+      <h2>等待模型配置</h2>
+      <p id="waiting-detail">尚未收到 initialState。请等待宿主通过 MCP App bridge 返回 tool-result，收到有效 state 后才会显示配置表单。</p>
+    </section>
+    <main id="settings-panel" hidden>
+      <section class="card">
+        <div class="section-head">
+          <div><h2>运行模式</h2><p>切换只影响沙箱配置；当前已选模型不会由页面自动更换。</p></div>
+        </div>
+        <div class="mode-options" id="mode-options">
+          <label class="mode-option" for="mode-official"><input id="mode-official" name="configured-mode" type="radio" value="official"><span>官方模式</span></label>
+          <label class="mode-option" for="mode-third-party"><input id="mode-third-party" name="configured-mode" type="radio" value="third-party"><span>第三方模式</span></label>
+        </div>
+        <details style="margin-top:12px"><summary>配置来源与生效说明</summary><dl class="summary-grid" id="source-summary"></dl>
+        <ul class="warning-list">
+          <li>保存后需按宿主路径刷新模型目录，并重新选择模型；仅刷新页面不能证明目录已更新。</li>
+          <li>这里只证明配置已写入，不证明真实请求已按新配置运行（runtimeVerified=false）。</li>
+          <li>当前沙箱不会自动同步到新会话；新沙箱仍使用其账号默认配置。</li>
+        </ul>
+        <p id="state-note" class="state-note" hidden></p></details>
+      </section>
+      <section class="card">
+        <div class="section-head">
+          <div><h2>模型参数</h2><p>支持的档位因模型而异。留空输入窗口可恢复模型默认值。</p></div>
+          <button id="max-effort-button" class="button secondary" type="button">全部设为各自最高可用档</button>
+        </div>
+        <p class="field-help" style="margin:-4px 0 12px">一键操作会为每个模型选择其声明的最高档位；不支持 max 的模型不会写成 max。</p>
+        <label class="field-label" for="model-selector">选择要配置的模型</label><select id="model-selector" style="width:100%;margin-bottom:14px"></select>
+        <div id="model-list" class="list"></div>
+      </section>
+      <details class="card"><summary style="cursor:pointer;font-weight:700">自定义 API / Provider 与路由</summary>
+        <div class="section-head">
+          <div><h2>Provider 与路由</h2><p>Provider 只保存环境变量名；页面不读取、输入或显示 API Key 值。</p></div>
+        </div>
+        <div class="field-grid" style="margin-bottom:14px">
+          <div class="field"><label class="field-label" for="default-provider">默认 Provider</label><select id="default-provider"></select></div>
+          <div class="field"><label class="field-label" for="routing-mode">路由模式</label><select id="routing-mode"><option value="same-name">same-name（同名优先）</option><option value="preset-only">preset-only（仅预设）</option><option value="explicit">explicit（仅显式路由）</option></select></div>
+        </div>
+        <div class="toolbar"><div><strong style="display:block;font-size:14px">已配置 Provider</strong><span class="field-help">编辑非凭据字段时，API Key 环境变量名可留空以保持原值。</span></div></div>
+        <div id="provider-list" class="list" style="margin-bottom:16px"></div>
+        <div class="provider-card">
+          <header><div><h3>新增 Provider</h3><p class="subtle">Provider ID 保存后不可在表单中改名；请使用唯一、稳定的名称。</p></div></header>
+          <div class="card-body">
+            <div class="field-grid">
+              <div class="field"><label class="field-label" for="new-provider-id">Provider ID</label><input id="new-provider-id" autocomplete="off" placeholder="例如：my-provider"></div>
+              <div class="field"><label class="field-label" for="new-provider-label">显示名称 label</label><input id="new-provider-label" autocomplete="off" placeholder="例如：我的服务"></div>
+              <div class="field"><label class="field-label" for="new-provider-base-url">Base URL</label><input id="new-provider-base-url" autocomplete="off" inputmode="url" placeholder="OpenAI-compatible /v1 地址"></div>
+              <div class="field"><label class="field-label" for="new-provider-preset">Preset</label><input id="new-provider-preset" autocomplete="off" placeholder="例如：bailian，可留空"></div>
+              <div class="field"><label class="field-label" for="new-provider-api-key-env">API Key 环境变量名</label><input id="new-provider-api-key-env" autocomplete="off" spellcheck="false" placeholder="例如：MY_PROVIDER_API_KEY"><p class="field-help">只填写环境变量名称，不要填写密钥值。</p></div>
+              <div class="field"><label class="field-label" for="new-provider-extra-models">额外模型</label><textarea id="new-provider-extra-models" spellcheck="false" placeholder="一行一个，也可用逗号分隔"></textarea></div>
+            </div>
+            <div class="inline-actions" style="margin-top:12px"><button id="add-provider-button" class="button" type="button">添加 Provider</button></div>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top:20px"><div><strong style="display:block;font-size:14px">显式路由</strong><span class="field-help">删除已有路由会提交 null，表示恢复官方路由。</span></div></div>
+        <div id="route-list" class="list" style="margin-bottom:12px"></div>
+        <div class="provider-card">
+          <header><div><h3>新增路由</h3><p class="subtle">别名通常是官方模型 ID；目标可写 provider:model、provider、model 或 official。</p></div></header>
+          <div class="card-body">
+            <div class="field-grid">
+              <div class="field"><label class="field-label" for="new-route-alias">路由别名 alias</label><input id="new-route-alias" autocomplete="off" placeholder="例如：hy3"></div>
+              <div class="field"><label class="field-label" for="new-route-target">路由目标 target</label><input id="new-route-target" list="route-target-options" autocomplete="off" placeholder="例如：my-provider:upstream-model"></div>
+            </div>
+            <div class="inline-actions" style="margin-top:12px"><button id="add-route-button" class="button" type="button">添加路由</button></div>
+          </div>
+        </div>
+        <datalist id="route-target-options"></datalist>
+      </details>
+      <section id="offline-panel" class="card" hidden>
+        <div class="section-head"><div><h2>离线指令 fallback</h2><p>这里只生成待发送内容，不代表设置已经应用。复制到原会话发送后才会生效。</p></div></div>
+        <div class="notice info" id="offline-status">尚未应用：请复制下方内容到原会话发送。</div>
+        <label class="field-label" for="offline-output">models_settings 调用指令</label>
+        <textarea id="offline-output" class="offline-output" readonly spellcheck="false"></textarea>
+        <div class="inline-actions" style="margin-top:12px"><button id="copy-offline-button" class="button secondary" type="button">复制指令</button><button id="download-offline-button" class="button secondary" type="button">下载无密钥 JSON 草案</button></div>
+      </section>
+    </main>
+  </div>
+  <div class="action-dock">
+    <div class="action-inner">
+      <div class="action-copy"><strong id="action-title">等待模型配置</strong><span id="action-detail">收到 state 后才能编辑或生成指令。</span></div>
+      <button id="apply-button" class="button" type="button" disabled>等待配置</button>
+    </div>
+  </div>
+  <script type="application/json" id="initial-state">__WB3P_STATE__</script>
+  <script id="wb3p-bridge">__WB3P_BRIDGE__</script>
+  <script id="wb3p-ui">  "use strict";
+  (function () {
+    var EFFORT_ORDER = ["minimal", "low", "medium", "high", "xhigh", "max"];
+    var app = { original: null, draft: null, bridge: null, bridgeReady: false, bridgeConnecting: false, busy: false, pendingApply: null, nextLocalId: 0 };
+    function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+    function hasOwn(object, key) { return Object.prototype.hasOwnProperty.call(object || {}, key); }
+    function copy(value) { return value === undefined || value === null ? value : JSON.parse(JSON.stringify(value)); }
+    function text(value, fallback) { return value === undefined || value === null || value === "" ? fallback || "" : String(value); }
+    function normalizeInteger(value) { if (value === null || value === undefined || value === "") return null; var number = Number(value); return Number.isFinite(number) && number > 0 ? Math.floor(number) : null; }
+    function uniqueStrings(values) {
+      var result = [], seen = new Set(), list = Array.isArray(values) ? values : [];
+      list.forEach(function (value) { var item = text(value).trim(); if (item && !seen.has(item)) { seen.add(item); result.push(item); } });
+      return result;
+    }
+    function sortEfforts(values) { var declared = new Set(Array.isArray(values) ? values.map(String) : []); return EFFORT_ORDER.filter(function (level) { return declared.has(level); }); }
+    function highestSupportedEffort(values) { var sorted = sortEfforts(values); return sorted.length ? sorted[sorted.length - 1] : null; }
+    function effortOptionValues(model) { var values = []; if (model && model.canDisableThinking === true) values.push("off", "on"); return values.concat(sortEfforts(model && model.supportedEfforts)); }
+    function looksLikeState(value) { return isObject(value) && hasOwn(value, "revision") && Array.isArray(value.models) && Array.isArray(value.providers) && isObject(value.routes); }
+    function extractState(value, depth) {
+      if (looksLikeState(value)) return value;
+      if (!isObject(value) || (depth || 0) > 3) return null;
+      var candidates = [
+        value.state, value.structuredContent, value.structuredContent && value.structuredContent.state,
+        value.content, value.content && value.content.structuredContent,
+        value.content && value.content.structuredContent && value.content.structuredContent.state,
+        value.params, value.params && value.params.structuredContent,
+        value.params && value.params.structuredContent && value.params.structuredContent.state,
+        value.result, value.result && value.result.structuredContent,
+        value.result && value.result.structuredContent && value.result.structuredContent.state
+      ];
+      for (var index = 0; index < candidates.length; index += 1) {
+        var found = extractState(candidates[index], (depth || 0) + 1);
+        if (found) return found;
+      }
+      return null;
+    }
+    function normalizeState(value) {
+      var source = isObject(value) ? value : {};
+      var providers = Array.isArray(source.providers) ? source.providers.map(function (provider, index) {
+        var item = isObject(provider) ? provider : {}, credential = isObject(item.credential) ? item.credential : {};
+        return {
+          id: text(item.id, "provider-" + (index + 1)), label: text(item.label, text(item.id, "Provider " + (index + 1))),
+          baseUrl: text(item.baseUrl), preset: text(item.preset), apiKeyEnv: text(item.apiKeyEnv), apiKeyEnvTouched: item.apiKeyEnvTouched === true, reuseCredential: item.reuseCredential === true,
+          extraModels: uniqueStrings(item.extraModels), credential: { kind: text(credential.kind, "unknown"), configured: credential.configured === true }
+        };
+      }).filter(function (provider) { return provider.id !== ""; }) : [];
+      var models = Array.isArray(source.models) ? source.models.map(function (model, index) {
+        var item = isObject(model) ? model : {}, id = text(item.id, "model-" + (index + 1));
+        return {
+          target: text(item.target, id), id: id, aliases: uniqueStrings(item.aliases), supportedEfforts: sortEfforts(item.supportedEfforts),
+          canDisableThinking: item.canDisableThinking === true,
+          configuredEffort: item.configuredEffort === null || item.configuredEffort === undefined ? null : String(item.configuredEffort),
+          maxInputTokens: normalizeInteger(item.maxInputTokens), maxOutputTokens: normalizeInteger(item.maxOutputTokens), baseInputTokens: normalizeInteger(item.baseInputTokens)
+        };
+      }).filter(function (model) { return model.target !== ""; }) : [];
+      var routes = {};
+      if (isObject(source.routes)) Object.keys(source.routes).forEach(function (alias) { if (source.routes[alias] !== null && source.routes[alias] !== undefined) routes[alias] = String(source.routes[alias]); });
+      return {
+        revision: source.revision === undefined ? null : source.revision, configuredMode: text(source.configuredMode, "default"),
+        sourceKind: text(source.sourceKind, "unknown"), readOnly: source.readOnly === true,
+        defaultProvider: source.defaultProvider === null || source.defaultProvider === undefined ? null : String(source.defaultProvider),
+        routingMode: text(source.routingMode, "same-name"), providers: providers, routes: routes, models: models, note: text(source.note),
+        switchMode: source.switchMode === undefined ? text(source.configuredMode, "default") : String(source.switchMode), maxEffortRequested: source.maxEffortRequested === true
+      };
+    }
+    function arrayEqual(left, right) { var a = Array.isArray(left) ? left : [], b = Array.isArray(right) ? right : []; if (a.length !== b.length) return false; for (var index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false; return true; }
+    function sameScalar(left, right) { var a = left === undefined || left === null || left === "" ? null : String(left), b = right === undefined || right === null || right === "" ? null : String(right); return a === b; }
+    function makePatch(originalValue, draftValue) {
+      var original = normalizeState(originalValue), draft = normalizeState(draftValue), patch = {};
+      if (draft.switchMode && !sameScalar(draft.switchMode, original.configuredMode)) patch.switchMode = draft.switchMode;
+      var originalModels = new Map();
+      original.models.forEach(function (model) { originalModels.set(model.target, model); });
+      var efforts = {}, contexts = {};
+      draft.models.forEach(function (model) {
+        var previous = originalModels.get(model.target);
+        if (!previous) return;
+        var currentEffort = model.configuredEffort === null ? null : String(model.configuredEffort);
+        var previousEffort = previous.configuredEffort === null ? null : String(previous.configuredEffort);
+        if (currentEffort !== previousEffort) efforts[model.target] = currentEffort;
+        var currentContext = normalizeInteger(model.maxInputTokens), previousContext = normalizeInteger(previous.maxInputTokens);
+        if (currentContext !== previousContext) contexts[model.target] = currentContext;
+      });
+      if (Object.keys(efforts).length && draft.maxEffortRequested !== true) patch.efforts = efforts;
+      if (Object.keys(contexts).length) patch.contexts = contexts;
+      var originalProviders = new Map();
+      original.providers.forEach(function (provider) { originalProviders.set(provider.id, provider); });
+      var providers = {};
+      draft.providers.forEach(function (provider) {
+        var previous = originalProviders.get(provider.id);
+        var endpointChanged = !previous || !sameScalar(provider.baseUrl, previous.baseUrl) || !sameScalar(provider.preset, previous.preset);
+        var changed = endpointChanged || !sameScalar(provider.label, previous.label) ||
+          !arrayEqual(provider.extraModels, previous.extraModels) ||
+          (provider.apiKeyEnvTouched && !sameScalar(provider.apiKeyEnv, previous.apiKeyEnv));
+        if (!changed) return;
+        var entry = { label: provider.label, baseUrl: provider.baseUrl, preset: provider.preset, extraModels: provider.extraModels.slice() };
+        if (!previous || provider.apiKeyEnvTouched) entry.apiKeyEnv = provider.apiKeyEnv;
+        if (endpointChanged && provider.reuseCredential) entry.reuseCredential = true;
+        providers[provider.id] = entry;
+      });
+      if (Object.keys(providers).length) patch.providers = providers;
+      if (!sameScalar(draft.defaultProvider, original.defaultProvider)) patch.defaultProvider = draft.defaultProvider || "";
+      if (!sameScalar(draft.routingMode, original.routingMode)) patch.routingMode = draft.routingMode;
+      var routes = {}, aliases = new Set(Object.keys(original.routes).concat(Object.keys(draft.routes)));
+      aliases.forEach(function (alias) {
+        var currentHas = hasOwn(draft.routes, alias), previousHas = hasOwn(original.routes, alias);
+        if (!currentHas && previousHas) routes[alias] = null;
+        else if (currentHas && (!previousHas || !sameScalar(draft.routes[alias], original.routes[alias]))) routes[alias] = draft.routes[alias];
+      });
+      if (Object.keys(routes).length) patch.routes = routes;
+      if (draft.maxEffortRequested === true) patch.maxEffort = true;
+      return patch;
+    }    function createElement(tagName, className, content) { var node = document.createElement(tagName); if (className) node.className = className; if (content !== undefined && content !== null) node.textContent = String(content); return node; }
+    function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+    function appendText(parent, tagName, className, content) { var node = createElement(tagName, className, content); parent.appendChild(node); return node; }
+    function fieldLabel(forId, labelText, helpText) { var label = createElement("label", "field-label", labelText); label.setAttribute("for", forId); if (helpText) label.setAttribute("title", helpText); return label; }
+    function setConnection(kind, title, detail) { document.getElementById("connection").className = "connection is-" + kind; document.getElementById("connection-title").textContent = title; document.getElementById("connection-detail").textContent = detail; }
+    function setStatus(kind, message) { var box = document.getElementById("operation-status"); box.hidden = false; box.className = "notice" + (kind === "error" ? " error" : kind === "info" ? " info" : ""); box.textContent = message; }
+    function hideStatus() { var box = document.getElementById("operation-status"); box.hidden = true; box.textContent = ""; }
+    function setBusy(value) { app.busy = value === true; refreshAction(); }
+    function readInitialState() {
+      var node = document.getElementById("initial-state"); if (!node) return null;
+      var raw = node.textContent.trim(); if (!raw || raw === "__WB3P" + "_STATE__") return null;
+      try { return extractState(JSON.parse(raw)); }
+      catch (error) { setStatus("error", "initialState JSON 解析失败；表单未使用任何回退假数据。"); return null; }
+    }
+    function providerLabel(id) { var providers = app.draft ? app.draft.providers : []; for (var index = 0; index < providers.length; index += 1) if (providers[index].id === id) return providers[index].label || providers[index].id; return id || "无"; }
+    function renderSummary() {
+      var container = document.getElementById("source-summary"); clear(container);
+      var rows = [["配置来源 sourceKind", app.original.sourceKind], ["已配置模式", app.original.configuredMode], ["是否只读", app.original.readOnly ? "是" : "否"], ["默认 Provider", app.original.defaultProvider ? providerLabel(app.original.defaultProvider) : "未设置"], ["路由模式", app.original.routingMode]];
+      rows.forEach(function (row) { var item = createElement("div", "summary-item"); appendText(item, "dt", "", row[0]); appendText(item, "dd", "", row[1]); container.appendChild(item); });
+      var note = document.getElementById("state-note"); note.hidden = !app.original.note; note.textContent = app.original.note || "";
+    }
+    function renderMode() {
+      var official = document.getElementById("mode-official"), thirdParty = document.getElementById("mode-third-party");
+      official.checked = app.draft.switchMode === "official"; thirdParty.checked = app.draft.switchMode === "third-party";
+      official.disabled = app.original.readOnly; thirdParty.disabled = app.original.readOnly;
+    }
+    function modelMeta(model) { var bits = []; if (model.maxOutputTokens) bits.push("配置输出预算 " + model.maxOutputTokens); if (model.baseInputTokens) bits.push("输入上限 " + model.baseInputTokens); return bits.join(" · ") || "宿主未提供 token 元数据"; }
+    function renderModels() {
+      var container = document.getElementById("model-list"); clear(container);
+      if (!app.draft.models.length) { container.appendChild(createElement("div", "empty", "当前 state 没有可配置模型。")); return; }
+      var selector = document.getElementById("model-selector"), selected = selector.value; clear(selector);
+      app.draft.models.forEach(function (model) { var option = createElement("option", "", model.id); option.value = model.target; selector.appendChild(option); });
+      selector.value = app.draft.models.some(function (m) { return m.target === selected; }) ? selected : app.draft.models[0].target;
+      app.draft.models.forEach(function (model, index) {
+        var card = createElement("article", "model-card"), header = createElement("header"), headText = createElement("div");
+        card.dataset.target = model.target; card.hidden = model.target !== selector.value;
+        appendText(headText, "h3", "", model.id); appendText(headText, "p", "subtle", "target: " + model.target);
+        if (model.aliases.length) { var tags = createElement("div", "tags"); model.aliases.forEach(function (alias) { appendText(tags, "span", "tag", "alias: " + alias); }); headText.appendChild(tags); }
+        header.appendChild(headText); card.appendChild(header);
+        var body = createElement("div", "card-body"), grid = createElement("div", "field-grid");
+        var effortField = createElement("div", "field"), effortId = "model-effort-" + index;
+        effortField.appendChild(fieldLabel(effortId, "思考档位"));
+        var effort = createElement("select"); effort.id = effortId;
+        var defaultOption = createElement("option", "", "默认（提交 null）"); defaultOption.value = "__default__"; effort.appendChild(defaultOption);
+        var options = effortOptionValues(model), currentUnsupported = model.configuredEffort && options.indexOf(model.configuredEffort) === -1;
+        options.forEach(function (level) {
+          var optionLabel = level === "off" ? "关闭思考（off）" : level === "on" ? (model.supportedEfforts.length ? "开启思考（默认档位）" : "开启思考（无强度档位）") : level;
+          var option = createElement("option", "", optionLabel); option.value = level; effort.appendChild(option);
+        });
+        effort.value = model.configuredEffort === null || currentUnsupported ? "__default__" : model.configuredEffort; effort.disabled = app.original.readOnly;
+        effort.addEventListener("change", function () { model.configuredEffort = effort.value === "__default__" ? null : effort.value; app.draft.maxEffortRequested = false; refreshAction(); });
+        effortField.appendChild(effort);
+        var effortHelp = "可选：" + (options.length ? options.join(", ") : "宿主未声明可调档位");
+        if (currentUnsupported) effortHelp += "；当前配置 " + model.configuredEffort + " 未在 supportedEfforts 中声明，未作为可调档显示";
+        else if (model.canDisableThinking) effortHelp += "；off/on 由 canDisableThinking=true 开放";
+        effortField.appendChild(createElement("p", "field-help", effortHelp)); grid.appendChild(effortField);
+        var contextField = createElement("div", "field"), contextId = "model-context-" + index;
+        contextField.appendChild(fieldLabel(contextId, "最大输入 token"));
+        var context = createElement("input"); context.id = contextId; context.type = "number"; context.min = "1024"; context.max = String(model.baseInputTokens || ""); context.step = "1"; context.inputMode = "numeric";
+        context.placeholder = model.baseInputTokens ? String(model.baseInputTokens) : "留空使用默认"; context.value = model.maxInputTokens === null ? "" : String(model.maxInputTokens); context.disabled = app.original.readOnly;
+        context.addEventListener("input", function () { model.maxInputTokens = normalizeInteger(context.value); refreshAction(); });
+        contextField.appendChild(context); contextField.appendChild(createElement("p", "field-help", "清空并保存会提交 null；" + modelMeta(model))); grid.appendChild(contextField);
+        body.appendChild(grid); card.appendChild(body); container.appendChild(card);
+      });
+    }
+    function renderProviderList() {
+      var container = document.getElementById("provider-list"); clear(container);
+      if (!app.draft.providers.length) { container.appendChild(createElement("div", "empty", "尚未配置 Provider。")); return; }
+      app.draft.providers.forEach(function (provider, index) {
+        var card = createElement("article", "provider-card"), header = createElement("header"), headText = createElement("div");
+        appendText(headText, "h3", "", provider.label || provider.id); appendText(headText, "p", "subtle", "id: " + provider.id); header.appendChild(headText);
+        var tags = createElement("div", "tags"); appendText(tags, "span", "tag " + (provider.credential.configured ? "ok" : "warn"), provider.credential.configured ? "凭据已配置" : "凭据未配置");
+        appendText(tags, "span", "tag", "kind: " + provider.credential.kind); header.appendChild(tags); card.appendChild(header);
+        var body = createElement("div", "card-body"), grid = createElement("div", "field-grid");
+        var labelField = createElement("div", "field"), labelId = "provider-" + index + "-label"; labelField.appendChild(fieldLabel(labelId, "显示名称 label"));
+        var labelInput = createElement("input"); labelInput.id = labelId; labelInput.autocomplete = "off"; labelInput.value = provider.label; labelInput.disabled = app.original.readOnly;
+        labelInput.addEventListener("input", function () { provider.label = labelInput.value; refreshAction(); }); labelField.appendChild(labelInput); grid.appendChild(labelField);
+        var baseField = createElement("div", "field"), baseId = "provider-" + index + "-base-url"; baseField.appendChild(fieldLabel(baseId, "Base URL"));
+        var baseInput = createElement("input"); baseInput.id = baseId; baseInput.autocomplete = "off"; baseInput.inputMode = "url"; baseInput.value = provider.baseUrl; baseInput.disabled = app.original.readOnly;
+        baseInput.addEventListener("input", function () { provider.baseUrl = baseInput.value; refreshAction(); }); baseField.appendChild(baseInput); grid.appendChild(baseField);
+        var presetField = createElement("div", "field"), presetId = "provider-" + index + "-preset"; presetField.appendChild(fieldLabel(presetId, "Preset"));
+        var presetInput = createElement("input"); presetInput.id = presetId; presetInput.autocomplete = "off"; presetInput.value = provider.preset; presetInput.disabled = app.original.readOnly;
+        presetInput.addEventListener("input", function () { provider.preset = presetInput.value; refreshAction(); }); presetField.appendChild(presetInput); grid.appendChild(presetField);
+        var isExistingProvider = app.original.providers.some(function (item) { return item.id === provider.id; });
+        if (isExistingProvider) {
+          var reuseField = createElement("div", "field wide"), reuseLabel = createElement("label", "mode-option");
+          var reuseInput = createElement("input"); reuseInput.type = "checkbox"; reuseInput.checked = provider.reuseCredential === true; reuseInput.disabled = app.original.readOnly;
+          reuseInput.addEventListener("change", function () { provider.reuseCredential = reuseInput.checked; refreshAction(); });
+          reuseLabel.appendChild(reuseInput); appendText(reuseLabel, "span", "", "更换地址时复用原凭据"); reuseField.appendChild(reuseLabel);
+          reuseField.appendChild(createElement("p", "field-help", "默认不勾选。修改 Base URL 或 Preset 时，需勾选此项或填写新的 API Key 环境变量名。"));
+          grid.appendChild(reuseField);
+        }
+        var envField = createElement("div", "field"), envId = "provider-" + index + "-api-key-env"; envField.appendChild(fieldLabel(envId, "API Key 环境变量名"));
+        var envInput = createElement("input"); envInput.id = envId; envInput.autocomplete = "off"; envInput.spellcheck = false; envInput.value = provider.apiKeyEnv; envInput.placeholder = provider.apiKeyEnv ? "" : "留空保持原值（不是密钥值）"; envInput.disabled = app.original.readOnly;
+        envInput.addEventListener("input", function () { provider.apiKeyEnv = envInput.value; provider.apiKeyEnvTouched = true; refreshAction(); }); envField.appendChild(envInput);
+        envField.appendChild(createElement("p", "field-help", "只填写变量名；页面不会读取或显示 API Key 值。")); grid.appendChild(envField);
+        var extraField = createElement("div", "field wide"), extraId = "provider-" + index + "-extra-models"; extraField.appendChild(fieldLabel(extraId, "额外模型 extraModels"));
+        var extraInput = createElement("textarea"); extraInput.id = extraId; extraInput.spellcheck = false; extraInput.value = provider.extraModels.join("\n"); extraInput.placeholder = "一行一个，也可用逗号分隔"; extraInput.disabled = app.original.readOnly;
+        extraInput.addEventListener("input", function () { provider.extraModels = uniqueStrings(extraInput.value.split(/[\n,]+/)); refreshAction(); }); extraField.appendChild(extraInput); grid.appendChild(extraField);
+        body.appendChild(grid);
+        if (app.original.readOnly === false && app.original.providers.every(function (item) { return item.id !== provider.id; })) {
+          var actions = createElement("div", "inline-actions"); actions.style.marginTop = "12px";
+          var remove = createElement("button", "button danger small", "移除未保存 Provider"); remove.type = "button";
+          remove.addEventListener("click", function () { app.draft.providers = app.draft.providers.filter(function (item) { return item.id !== provider.id; }); if (app.draft.defaultProvider === provider.id) app.draft.defaultProvider = null; renderProvidersAndDefaults(); });
+          actions.appendChild(remove); body.appendChild(actions);
+        }
+        card.appendChild(body); container.appendChild(card);
+      });
+    }    function renderDefaultProvider() {
+      var select = document.getElementById("default-provider"); clear(select);
+      var none = createElement("option", "", "未设置"); none.value = ""; select.appendChild(none);
+      app.draft.providers.forEach(function (provider) { var option = createElement("option", "", provider.label || provider.id); option.value = provider.id; select.appendChild(option); });
+      select.value = app.draft.defaultProvider || ""; if (!app.draft.providers.some(function (provider) { return provider.id === select.value; })) select.value = ""; select.disabled = app.original.readOnly;
+    }
+    function renderRoutes() {
+      var container = document.getElementById("route-list"); clear(container); var aliases = Object.keys(app.draft.routes);
+      if (!aliases.length) container.appendChild(createElement("div", "empty", "当前没有显式路由。"));
+      else aliases.sort().forEach(function (alias) {
+        var row = createElement("div", "route-card"), line = createElement("div", "route-row");
+        appendText(line, "div", "", alias); appendText(line, "div", "route-arrow", "→"); appendText(line, "div", "route-target", app.draft.routes[alias]);
+        var remove = createElement("button", "button danger small", "删除路由"); remove.type = "button"; remove.disabled = app.original.readOnly; remove.setAttribute("aria-label", "删除路由 " + alias);
+        remove.addEventListener("click", function () { delete app.draft.routes[alias]; renderRoutes(); refreshAction(); }); line.appendChild(remove); row.appendChild(line); container.appendChild(row);
+      });
+      var datalist = document.getElementById("route-target-options"); clear(datalist); var values = ["official"];
+      app.draft.providers.forEach(function (provider) { values.push(provider.id); }); Object.keys(app.draft.routes).forEach(function (alias) { values.push(app.draft.routes[alias]); });
+      new Set(values).forEach(function (value) { var option = createElement("option"); option.value = value; datalist.appendChild(option); });
+    }
+    function renderProvidersAndDefaults() { renderProviderList(); renderDefaultProvider(); renderRoutes(); refreshAction(); notifySizeSoon(); }
+    function renderEditor() {
+      document.getElementById("waiting-panel").hidden = true; document.getElementById("settings-panel").hidden = false;
+      renderMode(); renderSummary(); renderModels(); renderProvidersAndDefaults();
+      var maxButton = document.getElementById("max-effort-button"); maxButton.disabled = app.original.readOnly || !app.draft.models.length;
+      ["new-provider-id", "new-provider-label", "new-provider-base-url", "new-provider-preset", "new-provider-api-key-env", "new-provider-extra-models", "new-route-alias", "new-route-target", "add-provider-button", "add-route-button"].forEach(function (elementId) { document.getElementById(elementId).disabled = app.original.readOnly; });
+      document.getElementById("routing-mode").value = app.draft.routingMode;
+      refreshAction(); notifySizeSoon();
+    }
+    function applyState(state, reason) {
+      var normalized = normalizeState(state); app.original = normalizeState(state); app.draft = copy(normalized); app.draft.switchMode = app.original.configuredMode; app.draft.maxEffortRequested = false;
+      renderEditor(); if (reason === "bridge") document.getElementById("waiting-detail").textContent = "已收到宿主 state。";
+    }
+    function currentPatch() { return app.original && app.draft ? makePatch(app.original, app.draft) : {}; }
+    function currentRequest() { return { action: "apply", expectedRevision: app.original ? app.original.revision : null, patch: currentPatch() }; }
+    function refreshAction() {
+      var button = document.getElementById("apply-button"), title = document.getElementById("action-title"), detail = document.getElementById("action-detail");
+      if (!app.original || !app.draft) { button.textContent = "等待配置"; button.disabled = true; title.textContent = "等待模型配置"; detail.textContent = "收到有效 state 后才会显示可保存的操作。"; return; }
+      var patch = currentPatch(), hasPatch = Object.keys(patch).length > 0; var bridgeMode = app.bridgeReady && app.bridge && typeof app.bridge.callTool === "function";
+      button.textContent = app.original.readOnly ? "宿主只读" : bridgeMode ? (app.busy ? "应用中…" : "保存并应用") : "生成离线指令";
+      button.disabled = app.original.readOnly || app.busy || !hasPatch;
+      title.textContent = app.original.readOnly ? "宿主只读" : hasPatch ? (bridgeMode ? "通过宿主桥应用" : "离线产物模式") : "尚无修改";
+      detail.textContent = app.original.readOnly ? "当前 state 标记 readOnly，不能提交修改。" : hasPatch ? (bridgeMode ? "会调用 window.wb3pBridge.callTool(request)。" : "尚未应用；生成后复制到原会话发送。") : "修改模式、模型、Provider 或路由后即可提交。";
+    }
+    function revealOffline(request) {
+      var panel = document.getElementById("offline-panel"), output = document.getElementById("offline-output"); panel.hidden = false;
+      output.value = "请调用 models_settings 工具应用以下设置：\n" + JSON.stringify(request, null, 2);
+      document.getElementById("offline-status").textContent = "尚未应用：请复制下方内容到原会话发送；复制成功也不代表宿主已写入。"; notifySizeSoon();
+    }
+    function generateOffline() { var request = currentRequest(); if (!Object.keys(request.patch).length) { setStatus("info", "没有需要提交的修改。"); return; } revealOffline(request); setStatus("info", "已生成离线指令，但尚未应用。请复制到原会话发送。"); }
+    async function copyOffline() {
+      var output = document.getElementById("offline-output"); if (!output.value) { setStatus("info", "请先生成离线指令。"); return; }
+      try { if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") throw new Error("clipboard unavailable"); await navigator.clipboard.writeText(output.value); }
+      catch (error) { output.focus(); output.select(); if (typeof document.execCommand !== "function" || document.execCommand("copy") !== true) { setStatus("error", "复制失败；请手动选择文本复制。设置仍未应用。"); return; } }
+      document.getElementById("offline-status").textContent = "已复制，但尚未应用；请发送到原会话后才可能生效。"; setStatus("info", "已复制离线指令。尚未应用，请发送到原会话。");
+    }
+    function downloadDraft() {
+      var output = document.getElementById("offline-output"); if (!output.value) { setStatus("info", "请先生成离线指令。"); return; }
+      var request = currentRequest(), blob = new Blob([JSON.stringify(request, null, 2) + "\n"], { type: "application/json" }), url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url; link.download = "wb3p-models-settings-draft.json"; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+      setStatus("info", "JSON 草案已下载；文件不含密钥，且尚未应用。");
+    }
+    async function applyViaBridge() {
+      var request = currentRequest(); if (!Object.keys(request.patch).length) { setStatus("info", "没有需要提交的修改。"); return; }
+      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { generateOffline(); return; }
+      var token = { id: ++app.nextLocalId, notificationState: null, resolved: false }; app.pendingApply = token; setBusy(true); hideStatus();
+      try {
+        var result = await app.bridge.callTool(request); token.resolved = true;
+        var explicitError = isObject(result) && (result.ok === false || result.isError === true || result.error);
+        if (explicitError) throw new Error("宿主返回错误");
+        if (result && result.committed === true && result.stateUnavailable === true) {
+          app.original = null; app.draft = null;
+          setStatus("error", "设置已提交，但读取回执失败；请重新打开设置，不能自动重试。备份仍保留。");
+          return;
+        }
+        var next = extractState(result);
+        if (!next) throw new Error("宿主未返回可识别的 state");
+        if (!app.original || JSON.stringify(next) !== JSON.stringify(app.original)) applyState(next, "bridge");
+        setStatus("info", "设置已写入，宿主已返回新 state。请刷新模型目录并重新选择模型；尚未验证实际请求，当前沙箱不会自动同步新会话。");
+      } catch (error) {
+        var message = error && error.message ? error.message : String(error);
+        setStatus("error", "设置应用未获确认。宿主桥调用失败：" + message + "。请重新读取状态后核对，不能自动重试。"); revealOffline(request);
+      } finally { if (app.pendingApply && app.pendingApply.id === token.id) app.pendingApply = null; setBusy(false); }
+    }
+    function onBridgeNotification(payload) {
+      var next = extractState(payload); if (!next) return;
+      if (app.bridge && typeof app.bridge.callTool === "function") app.bridgeReady = true;
+      if (app.pendingApply) return;
+      applyState(next, "bridge"); setConnection("online", "宿主桥已连接", "已通过 ui/notifications/tool-result 收到模型配置。");
+    }
+    function notifySizeSoon() {
+      window.requestAnimationFrame(function () {
+        if (app.bridgeReady && app.bridge && typeof app.bridge.notifySize === "function") { try { app.bridge.notifySize(); } catch (error) { /* best effort */ } }
+      });
+    }    async function connectBridge() {
+      var bridge = window.wb3pBridge; app.bridge = bridge || null;
+      if (!bridge || typeof bridge.connect !== "function") {
+        setConnection("offline", "离线产物模式", "未检测到已握手的 MCP App bridge；页面不会调用 HTTP，也不会伪造应用成功。"); refreshAction(); return;
+      }
+      app.bridgeConnecting = true; setConnection("connecting", "正在连接宿主 MCP App", "连接成功后将由 bridge tool-result 提供 state。");
+      if (typeof bridge.subscribe === "function") {
+        var subscription = bridge.subscribe(onBridgeNotification);
+        if (subscription && typeof subscription.catch === "function") subscription.catch(function () { setConnection("error", "宿主订阅失败", "桥未完成握手，继续使用离线 fallback。"); });
+      }
+      try {
+        var result = await bridge.connect(); if (result === false) throw new Error("宿主返回 connect=false");
+        app.bridgeReady = true; setConnection("online", "可以直接保存", "设置通过宿主 MCP 接口提交，不修改网页。");
+        var connectedState = extractState(result);
+        if (connectedState) applyState(connectedState, "bridge");
+        if (!app.original) {
+          if (typeof bridge.callTool !== "function") throw new Error("宿主 bridge 未提供 callTool");
+          var statusResult = await bridge.callTool({ action: "status" });
+          var statusState = extractState(statusResult);
+          if (!statusState) throw new Error("models_settings status 未返回可用 state");
+          applyState(statusState, "bridge");
+        }
+      } catch (error) {
+        app.bridgeReady = false;
+        var connectMessage = error && error.message ? error.message : String(error);
+        if (app.original) {
+          setConnection("offline", "离线产物模式", "宿主桥不可用；已载入初始 state，编辑只会生成离线指令：" + connectMessage);
+        } else {
+          setConnection("error", "模型配置不可用", "宿主连接或 status 读取失败，表单保持等待且没有应用任何设置：" + connectMessage);
+        }
+        setStatus("error", "读取模型配置失败，设置未应用：" + connectMessage);
+      }
+      finally { app.bridgeConnecting = false; refreshAction(); notifySizeSoon(); }
+    }
+    function markMaxEffort() {
+      if (!app.original || !app.draft) return; var changed = 0;
+      app.draft.models.forEach(function (model) { var level = highestSupportedEffort(model.supportedEfforts) || (model.canDisableThinking === true && model.supportedEfforts.length === 0 ? "on" : null); if (level && model.configuredEffort !== level) { model.configuredEffort = level; changed += 1; } });
+      app.draft.maxEffortRequested = true; renderModels(); refreshAction();
+      setStatus("info", changed ? "已为 " + changed + " 个模型选择各自最高可用档；保存时会同时提交 maxEffort=true。" : "各模型已是最高可用档；保存时会提交 maxEffort=true。");
+    }
+    function addProvider() {
+      var idInput = document.getElementById("new-provider-id"), id = idInput.value.trim();
+      if (!id) { setStatus("error", "请输入 Provider ID。"); idInput.focus(); return; }
+      if (app.draft.providers.some(function (provider) { return provider.id === id; })) { setStatus("error", "Provider ID 已存在，请使用唯一值。"); idInput.focus(); return; }
+      var label = document.getElementById("new-provider-label").value.trim() || id;
+      app.draft.providers.push({
+        id: id, label: label, baseUrl: document.getElementById("new-provider-base-url").value.trim(), preset: document.getElementById("new-provider-preset").value.trim(),
+        apiKeyEnv: document.getElementById("new-provider-api-key-env").value.trim(), apiKeyEnvTouched: true, reuseCredential: false,
+        extraModels: uniqueStrings(document.getElementById("new-provider-extra-models").value.split(/[\n,]+/)), credential: { kind: "new", configured: false }
+      });
+      ["new-provider-id", "new-provider-label", "new-provider-base-url", "new-provider-preset", "new-provider-api-key-env", "new-provider-extra-models"].forEach(function (elementId) { document.getElementById(elementId).value = ""; });
+      renderProvidersAndDefaults(); setStatus("info", "Provider 已加入表单，尚未保存或应用。");
+    }
+    function addRoute() {
+      var aliasInput = document.getElementById("new-route-alias"), targetInput = document.getElementById("new-route-target"), alias = aliasInput.value.trim(), target = targetInput.value.trim();
+      if (!alias || !target) { setStatus("error", "路由 alias 和 target 都不能为空。"); (alias ? targetInput : aliasInput).focus(); return; }
+      app.draft.routes[alias] = target; aliasInput.value = ""; targetInput.value = ""; renderRoutes(); refreshAction(); setStatus("info", "路由已加入表单，尚未保存或应用。");
+    }
+    function initialize() {
+      document.getElementById("model-selector").addEventListener("change", function (event) {
+        document.querySelectorAll("#model-list .model-card").forEach(function (card) { card.hidden = card.dataset.target !== event.target.value; }); notifySizeSoon();
+      });
+      document.getElementById("max-effort-button").addEventListener("click", markMaxEffort);
+      document.getElementById("add-provider-button").addEventListener("click", addProvider);
+      document.getElementById("add-route-button").addEventListener("click", addRoute);
+      document.getElementById("copy-offline-button").addEventListener("click", copyOffline);
+      document.getElementById("download-offline-button").addEventListener("click", downloadDraft);
+      document.getElementById("mode-official").addEventListener("change", function () { if (document.getElementById("mode-official").checked) { app.draft.switchMode = "official"; refreshAction(); } });
+      document.getElementById("mode-third-party").addEventListener("change", function () { if (document.getElementById("mode-third-party").checked) { app.draft.switchMode = "third-party"; refreshAction(); } });
+      document.getElementById("default-provider").addEventListener("change", function (event) { if (app.draft) { app.draft.defaultProvider = event.target.value || null; refreshAction(); } });
+      document.getElementById("routing-mode").addEventListener("change", function (event) { if (app.draft) { app.draft.routingMode = event.target.value; refreshAction(); } });
+      document.getElementById("apply-button").addEventListener("click", function () { if (app.bridgeReady) applyViaBridge(); else generateOffline(); });
+      window.addEventListener("resize", notifySizeSoon);
+      var initial = readInitialState(); if (initial) applyState(initial, "initial"); refreshAction(); connectBridge();
+    }
+    window.__wb3pSettingsInternals = Object.freeze({
+      EFFORT_ORDER: EFFORT_ORDER.slice(), sortEfforts: sortEfforts, highestSupportedEffort: highestSupportedEffort,
+      effortOptionValues: effortOptionValues, extractState: extractState, makePatch: makePatch
+    });
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize);
+    else Promise.resolve().then(initialize);
+  })();
+  </script>
+</body>
+</html>

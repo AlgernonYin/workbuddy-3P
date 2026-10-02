@@ -2,11 +2,32 @@
 
 [English](README.md)
 
-**版本：** 2.3.0
+**版本：** 2.4.0
 
 WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkBuddy / CodeBuddy Code。它让模型选择使用你自己的 OpenAI 兼容 API。网页端和手机端共用同一套云沙箱机制，因此不需要修改网页或客户端。
 
 插件只改写自己管理的模型配置，ID 不由插件管理的用户模型会保留。
+
+## 设置入口（2.4）
+
+在会话中说 **“打开 WorkBuddy 3P 设置”**，或调用 `/models-settings`。支持 MCP Apps 的宿主会显示交互面板：
+
+- 官方/第三方切换；选择模型后调整其实际支持的思考档位。
+- 输入窗口可调小并恢复默认，不能扩大上游模型容量。
+- 编辑 API 地址、Provider、额外模型和官方槽位路由；现有凭据保留，面板不回显密钥。
+- “全部最高”逐模型选择最高合法档，不会把 Qwen 等模型硬设为 `max`。
+
+工具入口为 `models_settings`（`status` / `panel` / `apply`）。直接保存只走标准 MCP Apps 宿主桥，不开公网端口、不改网页。宿主不渲染 MCP Apps 时，使用会话选项向导；HTML 产物是**草案编辑器**，需将生成的无密钥指令发回原会话，不能把预览或复制当成已保存。浏览器隔离夹具已验证桥接保存和手机尺寸布局；官方云端面板、新会话和手机真机仍须独立验收，不能把宿主源码含接口当成通过。
+
+保存会检查配置 revision，创建私有备份，并在原路由锁内提交；旧面板不能覆盖新配置。普通写失败会回滚，检测到的外部并发变更不会在回滚时被覆盖。所有写者应遵守同一路由锁：对不协作的外部编辑器，最后比较到替换之间仍有极窄竞争窗口，不能保证 OS 级 compare-and-swap；这也不是多文件 crash-atomic 事务。账号私有 profile 的修改只改当前沙箱的本地副本，不会创建遮蔽它的 `workbuddy-3p.json`，也不会自动上传账号。沙箱独立状态仍需更新并上传私有 profile 才影响未来新沙箱。
+
+固定宿主凭据使用私有文件/环境；新 Provider 表单只接受环境变量名，不接受 API Key 文本。更换地址须提供新引用或明确勾选复用原凭据，避免把原密钥偷偷发给新服务。密钥设置仍通过私有运行时或账号私有包完成。
+
+模型档位请看[逐模型能力矩阵](docs/model-capabilities.md)，输入窗口请看[官方容量核对表](docs/model-windows.md)。2026-10-02 百炼实测：GLM-5/5.1 拒绝 `max`，最高可用是 `xhigh`；不能照抄泛化的 GLM 参数表。Kimi K3 已补齐 `low/high/max`。10 个旧型号的容量超报也已纠正。关闭思考仅在已验证的宿主路径开放；Kimi K3、DeepSeek V4.1 Flash 和 MiniMax M3 暂不提供未实现的关闭开关。`thinking_budget` 和 `ultracode` 不在本功能内。
+
+**生效边界：** 思考档位保存为模型默认值，启用思考的模型仍遵从原生用户/会话强度覆盖。`off` 通过禁用该自定义槽位的 reasoning 能力实现，不修改全局设置；需在插件中开启或重置才恢复该槽位的思考能力。宿主缓存旧目录时仍需刷新模型目录再重选；单纯刷新页面、resync 或保存成功不是运行时证据。上下文设置保存到 `workbuddy-3p.context.json`，只改变宿主模型的输入限制；上游 API 没有通用的 `context_window` 参数。面板 revision 是进程内随机密钥 HMAC，不暴露确定性的凭据摘要；MCP 重启后旧面板/草案必须重新读取。
+
+私有备份在 Linux 上使用目录 `700`、文件 `600`；Windows 的 `chmod` 不等于 NTFS ACL，请将配置目录放在仅自己的账户可访问的位置，不要同步/共享备份目录。
 
 ## 原理
 
@@ -224,7 +245,7 @@ provider 形式的写法应使用已配置的 provider 名称。显式路由优�
 
 ### reasoning effort 默认值
 
-2.3.0 新增路由模型的 reasoning effort 默认值。支持 `minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`；`off`、`ultracode` 和 token 预算不属于此功能。
+2.3.0 起支持路由模型的 reasoning effort 默认值。2.4 按模型校验 `minimal`、`low`、`medium`、`high`、`xhigh`、`max`，并在受支持的路径提供 `on/off` 思考开关；并非每个模型都支持这些值。`ultracode` 和 token 预算不属于此功能。
 
 在顶层 `effort` 对象中配置默认值：
 

@@ -4,7 +4,7 @@
 const LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"];
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k);
 const object = v => v !== null && typeof v === "object" && !Array.isArray(v);
-const valid = v => typeof v === "string" && LEVELS.includes(v);
+const valid = v => typeof v === "string" && (LEVELS.includes(v) || ["off", "on"].includes(v));
 const error = message => { throw new Error(message); };
 
 function validatePreferences(value, local = false) {
@@ -37,14 +37,20 @@ function mergeModel(...layers) {
 
 function capability(model) {
   if (model.supportsReasoning !== true) return { supportedEfforts: [], reason: "model does not declare reasoning support" };
-  if (model.compat?.supportsReasoningEffort === false)
-    return { supportedEfforts: [], reason: "provider protocol declares effort unsupported" };
-  const declared = model.reasoning?.supportedEfforts;
   const map = model.thinkingLevelMap;
+  const providerCanDisableThinking = model.onlyReasoning !== true && model.reasoning?.canDisableThinking === true &&
+    object(map) && map.off !== null && map.off !== undefined;
+  // Native host's same-name Kimi K3 / DeepSeek V4.1 paths currently omit the provider thinking
+  // toggle, so removing reasoning fields would silently keep provider thinking ON.
+  const canDisableThinking = providerCanDisableThinking && !["kimi-k3", "deepseek-v4.1-flash"].includes(model.id);
+  if (model.compat?.supportsReasoningEffort === false)
+    return { supportedEfforts: [], canDisableThinking, providerCanDisableThinking, reason: "provider protocol declares effort unsupported; thinking toggle may still be supported" };
+  const declared = model.reasoning?.supportedEfforts;
   let levels = Array.isArray(declared) ? LEVELS.filter(v => declared.includes(v))
     : object(map) ? LEVELS.filter(v => own(map, v) && map[v] !== null && map[v] !== undefined) : [];
   if (object(map)) levels = levels.filter(v => own(map, v) && map[v] !== null && map[v] !== undefined);
-  return { supportedEfforts: levels, ...(levels.length ? {} : { reason: "model has no declared adjustable effort levels" }) };
+  return { supportedEfforts: levels, canDisableThinking, providerCanDisableThinking,
+    ...(levels.length ? {} : { reason: "model has no declared adjustable effort levels" }) };
 }
 
 function preference(target, local, config, base) {
@@ -63,11 +69,18 @@ function applyEfforts(models, owner, local, config = {}) {
     const base = model.reasoning?.defaultEffort ?? model.reasoning?.effort ?? null;
     const cap = capability(model), pref = preference(target, local, config, base);
     const adjustable = pref.source !== "model";
-    const accepted = adjustable && cap.supportedEfforts.includes(pref.level);
+    const accepted = adjustable && (cap.supportedEfforts.includes(pref.level) || ["off", "on"].includes(pref.level) && cap.canDisableThinking);
     if (adjustable && !accepted && pref.specific)
       error(`model ${target} does not support requested effort; supported: ${cap.supportedEfforts.join(", ") || "none"}`);
-    if (accepted) model.reasoning = { ...model.reasoning, defaultEffort: pref.level, effort: pref.level };
-    info.push({ target, model: model.id, supportedEfforts: cap.supportedEfforts, baseEffort: base,
+    if (accepted) {
+      const native = pref.level === "on" ? cap.supportedEfforts.at(-1) || (base !== "off" && base) || "high" : pref.level;
+      model.reasoning = { ...model.reasoning, defaultEffort: native, effort: native };
+      // The host's default-effort normalizer does not accept "off". Disabling
+      // this custom entry's reasoning capability is the supported per-model seam.
+      if (pref.level === "off") model.supportsReasoning = false;
+    }
+    info.push({ target, model: model.id, supportedEfforts: cap.supportedEfforts, canDisableThinking: cap.canDisableThinking === true,
+      providerCanDisableThinking: cap.providerCanDisableThinking === true, baseEffort: base,
       configuredEffort: accepted ? pref.level : base, source: accepted ? pref.source : "model",
       requestedEffort: pref.level, requestedSource: pref.source, applied: accepted,
       ...(!accepted && adjustable ? { reason: cap.reason || "requested default is not supported; original model default retained" }

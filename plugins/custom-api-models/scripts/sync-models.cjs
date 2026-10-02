@@ -3,11 +3,15 @@
 // Writes only the plugin-managed part of ~/.codebuddy/models.json; user-defined entries are preserved.
 "use strict";
 const fs = require("fs"), path = require("path"), os = require("os");
+const fingerprint = (cfg, mode, prefs, limits) => require("crypto").createHash("sha256").update(JSON.stringify([cfg, mode, prefs, limits])).digest("hex");
 const ROOT = path.resolve(__dirname, "..");
 const PRESETS = path.join(ROOT, "presets");
+const presetFingerprint = () => require("crypto").createHash("sha256").update(JSON.stringify(fs.readdirSync(PRESETS)
+  .filter(n => n.endsWith(".json")).sort().map(n => [n, fs.readFileSync(path.join(PRESETS, n), "utf8")]))).digest("hex");
 const ENV = process.env;
 const MODES = ["same-name", "preset-only", "explicit"];
 const effort = require("./effort.cjs");
+const context = require("./context.cjs");
 
 class ConfigError extends Error {}
 const fail = (msg) => { throw new ConfigError(msg); };
@@ -21,6 +25,7 @@ const paths = (dir = configDir()) => ({
   lock: path.join(dir, "workbuddy-3p.lock"), switch: path.join(dir, "workbuddy-3p.switch"),
   lastError: path.join(dir, "workbuddy-3p.last-error.json"), backup: path.join(dir, "models.json.bak-workbuddy-3p"),
   effort: path.join(dir, "workbuddy-3p.effort.json"),
+  context: path.join(dir, "workbuddy-3p.context.json"),
 });
 
 // Missing file -> null. Existing but unreadable/invalid -> error (never silently ignored).
@@ -31,11 +36,15 @@ function readJsonStrict(p, what) {
 }
 const readJsonLoose = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
 const readText = (p) => { try { return fs.readFileSync(p, "utf8").trim(); } catch { return ""; } };
-function writeAtomic(p, text) {
+function writeAtomic(p, text, expected) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp-${process.pid}-${Date.now()}`;
   try {
     fs.writeFileSync(tmp, text, { mode: 0o600 });
+    if (expected !== undefined) {
+      const current = fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
+      if (current !== expected) fail("settings target changed before atomic replace");
+    }
     fs.renameSync(tmp, p);
   } finally { try { fs.unlinkSync(tmp); } catch {} }
   try { fs.chmodSync(p, 0o600); } catch {}
@@ -79,8 +88,8 @@ function parseSwitch(v, where) {
   fail(`${where}: expected "official" or "third-party", got ${JSON.stringify(v)}`);
 }
 // Precedence: switch file (set by MCP tool / CLI, per sandbox) > env/plugin option > config.enabled > on.
-function resolveSwitch(dir, cfg) {
-  const f = parseSwitch(readText(paths(dir).switch), "workbuddy-3p.switch");
+function resolveSwitch(dir, cfg, ignoreLocal = false) {
+  const f = ignoreLocal ? null : parseSwitch(readText(paths(dir).switch), "workbuddy-3p.switch");
   if (f) return { mode: f, from: "switch file" };
   const e = parseSwitch(ENV.WB3P_ENABLED, "WB3P_ENABLED") || parseSwitch(opt("ENABLED"), "plugin option ENABLED");
   if (e) return { mode: e, from: ENV.WB3P_ENABLED ? "WB3P_ENABLED" : "plugin option ENABLED" };
@@ -254,7 +263,7 @@ async function setEffort(args = {}) {
       action === "set" && scope === "all" || scope !== "model" && args.model !== undefined ||
       action === "reset" && args.level !== undefined)
     fail("invalid effort action/scope combination");
-  if (action === "set" && !effort.LEVELS.includes(args.level)) fail("invalid effort level; use minimal, low, medium, high, xhigh or max");
+  if (action === "set" && !["off", "on", ...effort.LEVELS].includes(args.level)) fail("invalid effort level; use on, off, minimal, low, medium, high, xhigh or max");
   const p = paths();
   return withLock(p.dir, async () => {
     const previous = fs.existsSync(p.effort) ? fs.readFileSync(p.effort, "utf8") : null;
@@ -268,7 +277,7 @@ async function setEffort(args = {}) {
       target = effort.resolveTarget(baseline, args.model);
       if (action === "set") {
         const cap = baseline.effort.models.find(m => m.target === target);
-        if (!cap.supportedEfforts.includes(args.level)) fail(`model ${target} does not support requested effort; supported: ${cap.supportedEfforts.join(", ") || "none"}`);
+        if (!cap.supportedEfforts.includes(args.level) && !(["off", "on"].includes(args.level) && cap.canDisableThinking)) fail(`model ${target} does not support requested effort; supported: ${cap.supportedEfforts.join(", ") || "none"}`);
         local.models = { ...local.models, [target]: args.level };
       } else if (local.models) delete local.models[target];
     } else if (scope === "default") {
@@ -442,7 +451,8 @@ async function buildPlan(cfg, dir, prev, opts = {}) {
   const models = [...entries.values()];
   const local = opts.preferences ?? readEffort(paths(dir));
   const appliedEffort = effort.applyEfforts(models, owner, local, cfg.effort || {});
-  return { models, owner, routed, extra, keep, hideOfficial: [...hideOfficial], warnings, providers: P, mode, effort: appliedEffort };
+  const inputLimits = context.apply(models, owner, opts.contextPreferences ?? readJsonStrict(paths(dir).context, "local context preferences") ?? { version: 1 });
+  return { models, owner, routed, extra, keep, hideOfficial: [...hideOfficial], warnings, providers: P, mode, effort: appliedEffort, contexts: inputLimits };
 }
 
 function publicSummary(plan) {
@@ -577,7 +587,9 @@ async function syncUnlocked(opts, p) {
     return { ok: true, ...base, active: false, reason, changed };
   }
 
-  const plan = await buildPlan(clone(cfg), p.dir, prevKeys(cur, state));
+  if (opts.preparedPlan && opts.preparedFingerprint !== fingerprint(cfg, sw.mode, readEffort(p), readJsonStrict(p.context, "local context preferences") || { version: 1 }))
+    fail("configuration changed before routing commit; prepared plan rejected");
+  const plan = opts.preparedPlan || await buildPlan(clone(cfg), p.dir, prevKeys(cur, state));
   const summary = { ok: plan.warnings.length === 0, partial: plan.warnings.length > 0 && plan.models.length > 0, ...base, active: plan.models.length > 0, ...publicSummary(plan) };
   if (opts.dryRun) return { ...summary, plan };
 
@@ -673,7 +685,11 @@ async function doctor() {
   return { ok: res.every(r => r.ok), warnings: plan.warnings, results: res };
 }
 
-module.exports = { sync, uninstall, doctor, status, setSwitch, effortStatus, setEffort, ConfigError };
+const settings = require("./settings.cjs")({ loadConfig, resolveSwitch, readEffort, buildPlan, parseModels, readState,
+  checkOwnership, prevKeys, writeAtomic, writeAtomicChecked: writeAtomic, syncUnlocked, fingerprint, presetFingerprint });
+async function settingsStatus() { const p = paths(); return withLock(p.dir, () => settings.viewUnlocked(p)); }
+async function applySettings(args) { const p = paths(); return withLock(p.dir, () => settings.applyUnlocked(p, args)); }
+module.exports = { sync, uninstall, doctor, status, setSwitch, effortStatus, setEffort, settingsStatus, applySettings, ConfigError };
 
 if (require.main === module) {
   const a = process.argv.slice(2), quiet = a.includes("--quiet");
