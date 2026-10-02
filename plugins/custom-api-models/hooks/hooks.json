@@ -1,7 +1,7 @@
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/scripts/sync-models.cjs\" --quiet", "timeout": 20 } ] }
+      { "hooks": [ { "type": "command", "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/scripts/sync-models.cjs\" --quiet", "timeout": 45 } ] }
     ]
   }
 }

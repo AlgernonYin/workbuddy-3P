@@ -47,6 +47,7 @@ function makeEnv(dir, extra = {}) {
     if (value === undefined || value === null) delete env[name];
     else env[name] = String(value);
   }
+  env.WB3P_PARAMETER_PRIORITY = "native";
   return env;
 }
 

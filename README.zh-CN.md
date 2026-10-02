@@ -2,17 +2,17 @@
 
 [English](README.md)
 
-**版本：** 2.4.0
+**版本：** 2.5.0
 
 WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkBuddy / CodeBuddy Code。它让模型选择使用你自己的 OpenAI 兼容 API。网页端和手机端共用同一套云沙箱机制，因此不需要修改网页或客户端。
 
 插件只改写自己管理的模型配置，ID 不由插件管理的用户模型会保留。
 
-## 设置入口（2.4）
+## 设置入口（2.5）
 
 在会话中说 **“打开 WorkBuddy 3P 设置”**，或调用 `/models-settings`。支持 MCP Apps 的宿主会显示交互面板：
 
-- 官方/第三方切换；选择模型后调整其实际支持的思考档位。
+- 参数优先级（3P/宿主原生）与官方/第三方切换；选择模型后调整其实际支持的思考档位。
 - 输入窗口可调小并恢复默认，不能扩大上游模型容量。
 - 编辑 API 地址、Provider、额外模型和官方槽位路由；现有凭据保留，面板不回显密钥。
 - “全部最高”逐模型选择最高合法档，不会把 Qwen 等模型硬设为 `max`。
@@ -23,11 +23,21 @@ WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkB
 
 固定宿主凭据使用私有文件/环境；新 Provider 表单只接受环境变量名，不接受 API Key 文本。更换地址须提供新引用或明确勾选复用原凭据，避免把原密钥偷偷发给新服务。密钥设置仍通过私有运行时或账号私有包完成。
 
-模型档位请看[逐模型能力矩阵](docs/model-capabilities.md)，输入窗口请看[官方容量核对表](docs/model-windows.md)。2026-10-02 百炼实测：GLM-5/5.1 拒绝 `max`，最高可用是 `xhigh`；不能照抄泛化的 GLM 参数表。Kimi K3 已补齐 `low/high/max`。10 个旧型号的容量超报也已纠正。关闭思考仅在已验证的宿主路径开放；Kimi K3、DeepSeek V4.1 Flash 和 MiniMax M3 暂不提供未实现的关闭开关。`thinking_budget` 和 `ultracode` 不在本功能内。
+参数优先级与回环边界请看[参数优先级说明](docs/parameter-priority.md)；模型档位请看[逐模型能力矩阵](docs/model-capabilities.md)，输入窗口请看[官方容量核对表](docs/model-windows.md)。2026-10-02 百炼实测：GLM-5/5.1 拒绝 `max`，最高可用是 `xhigh`；不能照抄泛化的 GLM 参数表。Kimi K3 已补齐 `low/high/max`。10 个旧型号的容量超报也已纠正。关闭思考仅在已验证的宿主路径开放；native 路径下 Kimi K3、DeepSeek V4.1 Flash 和 MiniMax M3 不提供未实现的关闭开关；3p 路径按下文已声明能力处理。`thinking_budget` 和 `ultracode` 不在本功能内。
 
-**生效边界：** 思考档位保存为模型默认值，启用思考的模型仍遵从原生用户/会话强度覆盖。`off` 通过禁用该自定义槽位的 reasoning 能力实现，不修改全局设置；需在插件中开启或重置才恢复该槽位的思考能力。宿主缓存旧目录时仍需刷新模型目录再重选；单纯刷新页面、resync 或保存成功不是运行时证据。上下文设置保存到 `workbuddy-3p.context.json`，只改变宿主模型的输入限制；上游 API 没有通用的 `context_window` 参数。面板 revision 是进程内随机密钥 HMAC，不暴露确定性的凭据摘要；MCP 重启后旧面板/草案必须重新读取。
+**生效边界：** `3p` 优先级由目标云端适配器强制已声明的思考参数；`native` 优先级仍允许原生用户/会话覆盖。`off` 会禁用自定义槽位的原生 reasoning 能力，并在 `3p` 下明确下发已支持的供应商开关，不修改全局设置。宿主缓存旧目录时仍需刷新目录再重选；刷新页面、resync 或保存成功不是运行时证据。上下文设置只改变宿主输入限制；上游 API 没有通用的 `context_window` 参数。面板 revision 使用进程内随机密钥 HMAC；MCP 重启后须重新读取旧面板/草案。
 
 私有备份在 Linux 上使用目录 `700`、文件 `600`；Windows 的 `chmod` 不等于 NTFS ACL，请将配置目录放在仅自己的账户可访问的位置，不要同步/共享备份目录。
+
+## 参数优先级与目标云端回环（2.5）
+
+`state.parameterPriority` / `patch.parameterPriority` 只接受 `3p` 或 `native`；state 缺失时按 `3p`。解析顺序为已保存的 `workbuddy-3p.parameters.json` > `WB3P_PARAMETER_PRIORITY` > `3p`，不暗混 CLI 默认。
+
+`3p` 让第三方请求按 3P 声明参数运行，并在目标云端沙箱内自动启停共享 Node 回环守护进程。宿主调用端使用不透明代理 key；代理读取私有、权限为 `600` 且已 gitignore 的 state/runtime 缓存，仅在向上游发出的 Authorization 请求中使用原上游 key，不把原 key 返回 UI 或会话。这里的“本机/localhost”指该沙箱，不是助手 Windows 电脑，也不是网页或手机客户端。
+
+`native` 走原生直连并关闭 3P 强制参数。旧缓存若仍指向回环，代理返回 HTTP 410，必须重选模型，不做透明透传；`official` 拒绝代理转发，不产生第三方流量。
+
+思考档位只按 live `supportedEfforts`、`canDisableThinking` 和协议声明判断，不用 `onlyReasoning` 猜档位。`3p` 下 DeepSeek V4.1 Flash 与 Kimi K3 的 `off` 可由代理强制，2.4 的 native off 限制仅适用于 native 路径。输入窗口是宿主本地输入限制，不扩大上游容量，也不是上下文压缩已通过。保存配置不等于 HTTP 成功，`runtimeVerified:false` 保持不变。
 
 ## 原理
 
@@ -272,11 +282,11 @@ provider 形式的写法应使用已配置的 provider 名称。显式路由优�
 
 请求的档位会按模型能力元数据校验。默认/全局档位会跳过不支持的模型并列明；单模型档位不支持时会拒绝。本文不提供固定的 provider 支持表，因为支持情况取决于模型和配置；应使用 `models_effort` status 查看当前配置集，不要据此推断整个 provider 的能力。
 
-这些值是模型默认值，原生会话或用户侧 `reasoningEffort` 仍可优先覆盖。官方模式下，插件不修改宿主原生的全局 `reasoningEffort` 或官方参数；设置会以 deferred 配置保存，切回第三方后再应用。status 只表示配置/磁盘状态，不证明实际请求已使用该档位（`runtimeVerified: false`）。宿主重新加载后，可能还需要重新选择模型。
+这些值是模型默认值。`native` 优先级允许会话/用户覆盖；`3p` 优先级由适配器强制已声明的供应商参数。官方模式不修改原生全局设置或官方参数；偏好会以 deferred 配置保存。status 只表示配置/磁盘状态，不证明实际请求采用该档位（`runtimeVerified: false`）。宿主重新加载后可能还需重选模型。
 
 本地 effort 设置只持久化到当前沙箱，不会自动同步到账号。若要让新沙箱使用相同默认值，应把 `effort` 放入账号私有 profile 的 `config`，再打包并上传该 profile；不要把 API key 或 profile 放到公网。手机端共用云端机制，但尚未进行真机验收。
 
-**先刷新宿主模型目录，再重新选模型。** 2026-10-01 云端网页实测发现：保存 `xhigh`、执行 `models_resync` 并重选模型后，宿主仍发出 `medium`，表现与宿主模型目录中的旧元数据/缓存状态一致。同一会话经官方宿主模型目录刷新并重选后，实际发出 `xhigh`，百炼返回 HTTP 200 和完整回复。插件 MCP 工具不能强制执行该宿主刷新；需使用宿主官方模型目录刷新/重载入口，再重选模型，宿主要求时再重开。单纯重开网页是否等价尚未验证。不要以为在网页聊天里输入 `/reload-plugins` 就执行了原生命令，也不能仅凭磁盘状态或正常回复判断强度已生效。手机仍未真机验收。
+**宿主保留旧元数据时需刷新并重选。** 2026-10-01 曾有会话在官方目录刷新后实际发出 `xhigh`；但 2026-10-02 最新 2.4 云端测试仍在保存 `xhigh` 后发出 `medium`，刷新接口的 HTTP 202 只证明已接收请求。因此 2.5 增加明确的 `3p` 参数优先级。历史成功、刷新回执、磁盘状态或正常回复均不能代替本次参数证据；2.5 生产网页链路和手机真机仍须独立验收。
 
 工具返回的 `profileConfigPatch.effort` 不含密钥，可用于**替换**私有配置中完整的 `effort` 对象；不要与旧 `effort.models` 逐字段合并，否则可能改变覆盖优先级。
 
@@ -388,7 +398,7 @@ node scripts/sync-models.cjs --effort-reset --all
 | `--doctor` | `official` 模式直接跳过，不会请求第三方；高优先级 `official` 开关甚至不会加载损坏的 provider/profile 配置。`third-party` 模式会对计划中的每个模型发送一次小额计费测试请求，可能消耗额度。只返回 HTTP 状态和耗时，不返回响应体或 key。 |
 | `--official` / `--third-party` | 为当前沙箱写入开关文件并同步。 |
 | `--switch clear` | 删除当前沙箱的开关文件，并回到较低优先级的来源。 |
-| `--status` | 返回 `configuredMode`、来源、`modelsJsonActive`/`active`（磁盘条目）、`runtimeVerified`（恒为 `false`）和最近错误；provider endpoint 只报告 `host`。 |
+| `--status` | 返回 `configuredMode`、`parameterPriority`/`parameterAdapter`、来源、`modelsJsonActive`/`active`（磁盘条目）、`runtimeVerified`（恒为 `false`）和最近错误；provider endpoint 只报告 `host`。 |
 | `--uninstall` | 删除归属记录和生成的 allowlist 条目，保留其它用户模型。state 损坏，或存在归属标记但 state 丢失时拒绝改动。 |
 | `--quiet` | 不输出正常 JSON，错误仍写入 stderr。思考强度命令失败时保留非零退出码；其它命令按 `SessionStart` hook 的兼容行为返回 `0`。 |
 | `--effort-status [--model ...]` | 返回全部已配置模型的 effort 配置和实际来源，或只返回指定模型。这里只是配置/磁盘状态，不证明实际请求已采用该值（`runtimeVerified: false`）。 |
@@ -399,7 +409,7 @@ stdio MCP server 提供：
 
 | 工具 | 行为 |
 | --- | --- |
-| `models_status` | 返回 `configuredMode`、来源、磁盘 `modelsJsonActive`/`active`、`runtimeVerified`（恒为 `false`）、管理条目数和最近错误；provider endpoint 只报告 `host`。 |
+| `models_status` | 返回 `configuredMode`、`parameterPriority`/`parameterAdapter`、来源、磁盘 `modelsJsonActive`/`active`、`runtimeVerified`（恒为 `false`）、管理条目数和最近错误；provider endpoint 只报告 `host`。 |
 | `models_switch` | 将当前沙箱切到 `official` 或 `third-party`，或用 `default` 清除开关。 |
 | `models_resync` | 重新读取配置并改写 `models.json`。 |
 | `models_doctor` | `official` 模式跳过且不请求第三方；`third-party` 模式对计划中的每个模型发送一次小额计费请求，并报告 HTTP 状态和耗时。 |
@@ -466,7 +476,7 @@ node scripts/sync-models.cjs --uninstall
 在仓库根目录运行：
 
 ```bash
-node --test tests/*.test.cjs
+node --test --test-concurrency=2 tests/*.test.cjs
 ```
 
 ## License

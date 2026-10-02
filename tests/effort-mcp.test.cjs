@@ -10,6 +10,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const env = { ...process.env, CODEBUDDY_CONFIG_DIR: dir };
   for (const k of Object.keys(env)) if (/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)) delete env[k];
+  env.WB3P_PARAMETER_PRIORITY = "native";
   fs.writeFileSync(path.join(dir, "workbuddy-3p.json"), JSON.stringify({ mode: "explicit",
     providers: { p: { baseUrl: "http://127.0.0.1:9/v1", apiKey: "FAKE_SECRET_CANARY_ONLY", extraModels: ["m"],
       models: { m: { supportsReasoning: true, compat: { supportsReasoningEffort: true },

@@ -1,5 +1,5 @@
 "use strict";
-// All mutation runs under sync-models' existing cross-process lock. No HTTP listener.
+// Settings mutation runs under the routing lock; no HTTP settings/control API.
 const fs = require("fs"), path = require("path"), crypto = require("crypto");
 const effort = require("./effort.cjs"), context = require("./context.cjs");
 const object = v => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -20,7 +20,7 @@ module.exports = function create(core) {
   function snapshot(p) {
     const { cfg, from } = core.loadConfig(p.dir);
     const raw = from && !["none", "env", "$WB3P_CONFIG_JSON"].includes(from) ? bytes(from) : JSON.stringify(cfg);
-    const files = Object.fromEntries(["models", "state", "effort", "context", "switch"].map(k => [k, bytes(p[k])]));
+    const files = Object.fromEntries(["models", "state", "effort", "context", "switch", "parameters"].map(k => [k, bytes(p[k])]));
     const environment = Object.fromEntries(Object.entries(process.env).filter(([k]) => /^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)));
     return { cfg, from, raw, files, revision: revision(JSON.stringify([from, raw, files, core.resolveSwitch(p.dir, cfg), environment, core.presetFingerprint()])) };
   }
@@ -36,6 +36,7 @@ module.exports = function create(core) {
         snap.from.endsWith("workbuddy-3p.profile.json") ? "private-profile" : "file",
       readOnly: snap.from === "$WB3P_CONFIG_JSON", defaultProvider: cfg?.default || Object.keys(cfg?.providers || {})[0] || "",
       routingMode: cfg?.mode || "same-name",
+      parameterPriority: core.readParameters(p).priority,
       providers: Object.entries(cfg?.providers || {}).map(([id, v]) => ({ id, label: v.label || "", preset: v.preset || "",
         baseUrl: v.baseUrl || plan?.providers[id]?.preset?.baseUrl || "", extraModels: v.extraModels || [],
         credential: { configured: v.apiKey || v.apiKeyEnv || v.apiKeyFile || v.apiKeyUrl ? true : null,
@@ -44,7 +45,7 @@ module.exports = function create(core) {
       models: (plan?.models || []).map(m => ({ target: `${plan.owner.get(m.id)}:${m.id}`, id: m.id,
         aliases: m.aliases, ...plan.effort.models.find(e => e.model === m.id),
         ...plan.contexts.find(c => c.target === `${plan.owner.get(m.id)}:${m.id}`), maxOutputTokens: m.maxOutputTokens })),
-      note: "Current sandbox only; account defaults require re-uploading your private profile. Values are model defaults, not runtime proof. Native session/user overrides win. Refresh the host model catalog, then reselect the model; this tool cannot force host refresh. Context is a local input limit, not an expansion of provider capacity. API keys are never returned."
+      note: "Current sandbox only; account defaults require re-uploading your private profile. 3p priority enforces declared thinking parameters in a loopback adapter on THIS plugin host; native priority uses host parameters. Official models bypass it. Values are configuration, not runtime proof. Refresh the host catalog then reselect the model. Context is a host input limit, not a provider capacity expansion. API keys are never returned."
     };
     return state;
   }
@@ -89,9 +90,11 @@ module.exports = function create(core) {
   async function applyUnlocked(p, args) {
     fields(args, ["action", "expectedRevision", "patch"]);
     if (args.action !== "apply" || typeof args.expectedRevision !== "string") reject("settings apply requires expectedRevision");
-    fields(args.patch, ["switchMode", "efforts", "contexts", "maxEffort", "providers", "routes", "defaultProvider", "routingMode"]);
+    fields(args.patch, ["switchMode", "efforts", "contexts", "maxEffort", "providers", "routes", "defaultProvider", "routingMode", "parameterPriority"]);
     const patch = args.patch, snap = snapshot(p);
     if (snap.revision !== args.expectedRevision) reject("settings changed; reopen the panel before applying");
+    const parameters = patch.parameterPriority === undefined ? core.readParameters(p) : { version: 1, priority: patch.parameterPriority };
+    if (!["3p", "native"].includes(parameters.priority)) reject("invalid parameter priority");
     const configChange = ["providers", "routes", "defaultProvider", "routingMode"].some(k => patch[k] !== undefined);
     if (configChange && snap.from === "$WB3P_CONFIG_JSON") reject("WB3P_CONFIG_JSON is read-only; edit its owner, not a lower-priority file");
     const cfg = clone(snap.cfg || { providers: {} });
@@ -105,7 +108,7 @@ module.exports = function create(core) {
     const original = core.parseModels(snap.files.models), ownership = core.readState(p);
     core.checkOwnership(original, ownership);
     const base = Object.keys(cfg.providers || {}).length ? await core.buildPlan(clone(cfg), p.dir, { providers: {}, keys: {} },
-      { metadataOnly: true, preferences: { version: 1 }, contextPreferences: { version: 1 } }) : null;
+      { metadataOnly: true, preferences: { version: 1 }, contextPreferences: { version: 1 }, parameterPriority: parameters.priority }) : null;
     const effortEdits = patch.maxEffort ? Object.fromEntries((base?.effort.models || []).filter(m => m.supportedEfforts.length || m.canDisableThinking)
       .map(m => [m.target, m.supportedEfforts.at(-1) || "on"])) : patch.efforts;
     if (effortEdits !== undefined) {
@@ -136,10 +139,10 @@ module.exports = function create(core) {
     context.validate(limits); effort.validatePreferences(prefs, true);
     // Metadata validation first; credential resolution is apply-only, never a provider inference request.
     if (base) await core.buildPlan(clone(cfg), p.dir, { providers: {}, keys: {} },
-      { metadataOnly: true, preferences: prefs, contextPreferences: limits });
+      { metadataOnly: true, preferences: prefs, contextPreferences: limits, parameterPriority: parameters.priority });
     else if (sw.mode !== "official") reject("configure a provider before enabling third-party models");
     const plan = base && sw.mode !== "official" ? await core.buildPlan(clone(cfg), p.dir, core.prevKeys(original, ownership),
-      { preferences: prefs, contextPreferences: limits }) : null;
+      { preferences: prefs, contextPreferences: limits, parameterPriority: parameters.priority }) : null;
     if (plan && (!plan.models.length || plan.warnings.length)) reject("provider keys or routes incomplete; previous configuration retained");
     if (snapshot(p).revision !== args.expectedRevision) reject("settings changed during validation; reopen the panel");
     const dest = snap.from && !["none", "env", "$WB3P_CONFIG_JSON"].includes(snap.from)
@@ -152,6 +155,7 @@ module.exports = function create(core) {
     if (effortEdits !== undefined) changedFiles.set(p.effort, Object.keys(prefs).length === 1 ? null : JSON.stringify(prefs, null, 2) + "\n");
     if (patch.contexts !== undefined) changedFiles.set(p.context, Object.keys(limits).length === 1 ? null : JSON.stringify(limits, null, 2) + "\n");
     if (patch.switchMode !== undefined) changedFiles.set(p.switch, patch.switchMode === "default" ? null : patch.switchMode + "\n");
+    if (patch.parameterPriority !== undefined) changedFiles.set(p.parameters, JSON.stringify(parameters, null, 2) + "\n");
     const backupDir = path.join(p.dir, "workbuddy-3p.backups", `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`);
     const previous = new Map([...changedFiles.keys()].map(file => [file, file === dest && configChange
       ? (dest === snap.from ? snap.raw : null) : snap.files[Object.keys(p).find(k => p[k] === file)]]));
@@ -171,7 +175,7 @@ module.exports = function create(core) {
         if (text === null) fs.rmSync(file, { force: true }); else core.writeAtomicChecked(file, text, previous.get(file));
       }
       // The prepared plan avoids repeated private credential URL access.
-      result = await core.syncUnlocked({ preparedPlan: plan, preparedFingerprint: core.fingerprint(cfg, sw.mode, prefs, limits) }, p);
+      result = await core.syncUnlocked({ preparedPlan: plan, preparedFingerprint: core.fingerprint(cfg, sw.mode, prefs, limits, parameters) }, p);
     } catch {
       let restored = true;
       for (const [file, text] of previous) try {

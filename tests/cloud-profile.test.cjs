@@ -8,6 +8,7 @@ function fixture(t) {
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const env={...process.env,CODEBUDDY_CONFIG_DIR:dir};
   for(const k of Object.keys(env)) if(/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)) delete env[k];
+  env.WB3P_PARAMETER_PRIORITY='native';
   function put(folder,value) {
     fs.mkdirSync(path.join(dir,'skills',folder),{recursive:true});
     fs.writeFileSync(path.join(dir,'skills',folder,'SKILL.md'),'---\nname: workbuddy-3p-profile\n---\n');

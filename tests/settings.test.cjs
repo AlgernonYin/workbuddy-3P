@@ -8,6 +8,7 @@ function fixture(t, extra = {}) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const env = { ...process.env, CODEBUDDY_CONFIG_DIR: dir };
   for (const k of Object.keys(env)) if (/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)) delete env[k];
+  env.WB3P_PARAMETER_PRIORITY = "native";
   const cfg = { mode: "explicit", providers: { p: { baseUrl: "http://127.0.0.1:9/v1", apiKey: canary,
     extraModels: ["a", "b", "toggle", "fixed"], models: {
       a: { maxInputTokens: 128000, supportsReasoning: true, onlyReasoning: false,

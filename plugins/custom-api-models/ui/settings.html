@@ -29,6 +29,7 @@
     }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
+    html, body { max-width: 100%; overflow-x: hidden; }
     html { background: var(--wb-bg); }
     body {
       margin: 0;
@@ -40,7 +41,7 @@
     }
     button, input, select, textarea { font: inherit; }
     button { touch-action: manipulation; }
-    .shell { width: min(100%, 980px); margin: 0 auto; padding: 0 16px calc(112px + env(safe-area-inset-bottom)); }
+    .shell { width: min(100%, 980px); max-width: 100%; min-width: 0; margin: 0 auto; padding: 0 16px calc(112px + env(safe-area-inset-bottom)); }
     .hero { padding: 28px 2px 18px; }
     .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
     .brand-mark {
@@ -63,7 +64,7 @@
     .connection.is-error .connection-dot { background: #dc2626; box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.14); }
     .connection strong { display: block; margin-bottom: 2px; }
     .connection p { margin: 0; color: var(--wb-muted); }
-    .card { margin: 0 0 16px; padding: 18px; border: 1px solid var(--wb-line); border-radius: var(--radius-lg); background: var(--wb-card); box-shadow: var(--wb-shadow); }
+    .card { min-width: 0; margin: 0 0 16px; padding: 18px; border: 1px solid var(--wb-line); border-radius: var(--radius-lg); background: var(--wb-card); box-shadow: var(--wb-shadow); }
     .waiting { padding: 42px 22px; text-align: center; }
     .waiting-symbol { display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 18px; color: var(--wb-green-700); background: var(--wb-green-50); font-size: 24px; animation: breathe 1.8s ease-in-out infinite; }
     @keyframes breathe { 0%, 100% { opacity: 0.72; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1); } }
@@ -86,7 +87,7 @@
     .warning-list li { padding: 10px 12px; border: 1px solid var(--wb-warn-line); border-radius: var(--radius-sm); background: var(--wb-warn-bg); color: #754b00; font-size: 13px; }
     .state-note { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--wb-green-500); background: var(--wb-green-50); color: #155e45; overflow-wrap: anywhere; }
     .list { display: grid; gap: 12px; }
-    .model-card, .provider-card, .route-card { border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: #fcfefd; overflow: hidden; }
+    .model-card, .provider-card, .route-card { min-width: 0; border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: #fcfefd; overflow: hidden; }
     .model-card > header, .provider-card > header, .route-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 13px 14px; border-bottom: 1px solid var(--wb-line); background: #f8fcfa; }
     .model-card h3, .provider-card h3, .route-card h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
     .subtle { margin: 3px 0 0; color: var(--wb-muted); font-size: 12px; overflow-wrap: anywhere; }
@@ -95,12 +96,12 @@
     .tag.ok { background: var(--wb-green-100); color: #065f46; }
     .tag.warn { background: #fff1c7; color: #7c5100; }
     .card-body { padding: 14px; }
-    .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .field-grid { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .field { min-width: 0; }
     .field.wide { grid-column: 1 / -1; }
     label.field-label { display: block; margin-bottom: 6px; color: #29463a; font-size: 12px; font-weight: 700; }
     .field-help { margin: 5px 0 0; color: var(--wb-muted); font-size: 11px; overflow-wrap: anywhere; }
-    input, select, textarea { width: 100%; min-height: 44px; padding: 10px 11px; border: 1px solid #cbdcd4; border-radius: var(--radius-sm); color: var(--wb-ink); background: #fff; outline: none; transition: border-color 140ms ease, box-shadow 140ms ease; }
+    input, select, textarea { width: 100%; max-width: 100%; min-width: 0; min-height: 44px; padding: 10px 11px; border: 1px solid #cbdcd4; border-radius: var(--radius-sm); color: var(--wb-ink); background: #fff; outline: none; transition: border-color 140ms ease, box-shadow 140ms ease; }
     textarea { min-height: 86px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 13px; }
     input:focus, select:focus, textarea:focus { border-color: var(--wb-green-500); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14); }
     input:disabled, select:disabled, textarea:disabled { color: #6b7f76; background: #eef4f1; cursor: not-allowed; }
@@ -143,6 +144,7 @@
       .section-head { flex-direction: column; }
       .toolbar { align-items: stretch; }
       .toolbar .button { width: 100%; }
+      .route-row .button { min-width: 0; white-space: normal; }
     }
   </style>
 </head><body>
@@ -155,7 +157,7 @@
           <h1>公众模型配置</h1>
         </div>
       </div>
-      <p class="hero-copy">选择模型，调整思考强度和输入窗口。密钥保留在私有运行时，不会显示在面板里。</p>
+      <p class="hero-copy">选择模型，调整思考强度和输入窗口，并决定第三方参数由 3P 还是宿主原生优先。密钥保留在私有运行时，不会显示在面板里。</p>
     </header>
     <section id="connection" class="connection is-connecting" aria-live="polite">
       <span class="connection-dot" aria-hidden="true"></span>
@@ -178,6 +180,16 @@
         <div class="mode-options" id="mode-options">
           <label class="mode-option" for="mode-official"><input id="mode-official" name="configured-mode" type="radio" value="official"><span>官方模式</span></label>
           <label class="mode-option" for="mode-third-party"><input id="mode-third-party" name="configured-mode" type="radio" value="third-party"><span>第三方模式</span></label>
+        </div>
+        <div class="field-grid" style="margin-top:14px">
+          <div class="field wide">
+            <label class="field-label" for="parameter-priority">参数优先级</label>
+            <select id="parameter-priority" aria-describedby="parameter-priority-help">
+              <option value="3p">3P 优先（第三方请求按 3P 声明参数）</option>
+              <option value="native">宿主原生优先（原生直连）</option>
+            </select>
+            <p id="parameter-priority-help" class="field-help">3P 优先启用目标云端宿主内的自运行回环参数适配；official 模式拒绝代理转发。宿主原生优先走原生直连，关闭 3P 强制参数；旧缓存代理返回 410，需重选模型，不做透明透传。未知模型不伪造参数。</p>
+          </div>
         </div>
         <details style="margin-top:12px"><summary>配置来源与生效说明</summary><dl class="summary-grid" id="source-summary"></dl>
         <ul class="warning-list">
@@ -268,6 +280,7 @@
     function sortEfforts(values) { var declared = new Set(Array.isArray(values) ? values.map(String) : []); return EFFORT_ORDER.filter(function (level) { return declared.has(level); }); }
     function highestSupportedEffort(values) { var sorted = sortEfforts(values); return sorted.length ? sorted[sorted.length - 1] : null; }
     function effortOptionValues(model) { var values = []; if (model && model.canDisableThinking === true) values.push("off", "on"); return values.concat(sortEfforts(model && model.supportedEfforts)); }
+    function normalizeParameterPriority(value) { return value === "native" ? "native" : "3p"; }
     function looksLikeState(value) { return isObject(value) && hasOwn(value, "revision") && Array.isArray(value.models) && Array.isArray(value.providers) && isObject(value.routes); }
     function extractState(value, depth) {
       if (looksLikeState(value)) return value;
@@ -309,7 +322,7 @@
       var routes = {};
       if (isObject(source.routes)) Object.keys(source.routes).forEach(function (alias) { if (source.routes[alias] !== null && source.routes[alias] !== undefined) routes[alias] = String(source.routes[alias]); });
       return {
-        revision: source.revision === undefined ? null : source.revision, configuredMode: text(source.configuredMode, "default"),
+        revision: source.revision === undefined ? null : source.revision, parameterPriority: normalizeParameterPriority(source.parameterPriority), configuredMode: text(source.configuredMode, "default"),
         sourceKind: text(source.sourceKind, "unknown"), readOnly: source.readOnly === true,
         defaultProvider: source.defaultProvider === null || source.defaultProvider === undefined ? null : String(source.defaultProvider),
         routingMode: text(source.routingMode, "same-name"), providers: providers, routes: routes, models: models, note: text(source.note),
@@ -320,6 +333,7 @@
     function sameScalar(left, right) { var a = left === undefined || left === null || left === "" ? null : String(left), b = right === undefined || right === null || right === "" ? null : String(right); return a === b; }
     function makePatch(originalValue, draftValue) {
       var original = normalizeState(originalValue), draft = normalizeState(draftValue), patch = {};
+      if (!sameScalar(draft.parameterPriority, original.parameterPriority)) patch.parameterPriority = draft.parameterPriority;
       if (draft.switchMode && !sameScalar(draft.switchMode, original.configuredMode)) patch.switchMode = draft.switchMode;
       var originalModels = new Map();
       original.models.forEach(function (model) { originalModels.set(model.target, model); });
@@ -379,7 +393,7 @@
     function providerLabel(id) { var providers = app.draft ? app.draft.providers : []; for (var index = 0; index < providers.length; index += 1) if (providers[index].id === id) return providers[index].label || providers[index].id; return id || "无"; }
     function renderSummary() {
       var container = document.getElementById("source-summary"); clear(container);
-      var rows = [["配置来源 sourceKind", app.original.sourceKind], ["已配置模式", app.original.configuredMode], ["是否只读", app.original.readOnly ? "是" : "否"], ["默认 Provider", app.original.defaultProvider ? providerLabel(app.original.defaultProvider) : "未设置"], ["路由模式", app.original.routingMode]];
+      var rows = [["配置来源 sourceKind", app.original.sourceKind], ["已配置模式", app.original.configuredMode], ["参数优先级", app.original.parameterPriority === "native" ? "宿主原生优先" : "3P 优先"], ["是否只读", app.original.readOnly ? "是" : "否"], ["默认 Provider", app.original.defaultProvider ? providerLabel(app.original.defaultProvider) : "未设置"], ["路由模式", app.original.routingMode]];
       rows.forEach(function (row) { var item = createElement("div", "summary-item"); appendText(item, "dt", "", row[0]); appendText(item, "dd", "", row[1]); container.appendChild(item); });
       var note = document.getElementById("state-note"); note.hidden = !app.original.note; note.textContent = app.original.note || "";
     }
@@ -387,6 +401,7 @@
       var official = document.getElementById("mode-official"), thirdParty = document.getElementById("mode-third-party");
       official.checked = app.draft.switchMode === "official"; thirdParty.checked = app.draft.switchMode === "third-party";
       official.disabled = app.original.readOnly; thirdParty.disabled = app.original.readOnly;
+      var priority = document.getElementById("parameter-priority"); priority.value = app.draft.parameterPriority;
     }
     function modelMeta(model) { var bits = []; if (model.maxOutputTokens) bits.push("配置输出预算 " + model.maxOutputTokens); if (model.baseInputTokens) bits.push("输入上限 " + model.baseInputTokens); return bits.join(" · ") || "宿主未提供 token 元数据"; }
     function renderModels() {
@@ -511,7 +526,7 @@
       button.textContent = app.original.readOnly ? "宿主只读" : bridgeMode ? (app.busy ? "应用中…" : "保存并应用") : "生成离线指令";
       button.disabled = app.original.readOnly || app.busy || !hasPatch;
       title.textContent = app.original.readOnly ? "宿主只读" : hasPatch ? (bridgeMode ? "通过宿主桥应用" : "离线产物模式") : "尚无修改";
-      detail.textContent = app.original.readOnly ? "当前 state 标记 readOnly，不能提交修改。" : hasPatch ? (bridgeMode ? "会调用 window.wb3pBridge.callTool(request)。" : "尚未应用；生成后复制到原会话发送。") : "修改模式、模型、Provider 或路由后即可提交。";
+      detail.textContent = app.original.readOnly ? "当前 state 标记 readOnly，不能提交修改。" : hasPatch ? (bridgeMode ? "会调用 window.wb3pBridge.callTool(request)。" : "尚未应用；生成后复制到原会话发送。") : "修改模式、参数优先级、模型、Provider 或路由后即可提交。";
     }
     function revealOffline(request) {
       var panel = document.getElementById("offline-panel"), output = document.getElementById("offline-output"); panel.hidden = false;
@@ -632,6 +647,7 @@
       document.getElementById("download-offline-button").addEventListener("click", downloadDraft);
       document.getElementById("mode-official").addEventListener("change", function () { if (document.getElementById("mode-official").checked) { app.draft.switchMode = "official"; refreshAction(); } });
       document.getElementById("mode-third-party").addEventListener("change", function () { if (document.getElementById("mode-third-party").checked) { app.draft.switchMode = "third-party"; refreshAction(); } });
+      document.getElementById("parameter-priority").addEventListener("change", function (event) { if (app.draft) { app.draft.parameterPriority = normalizeParameterPriority(event.target.value); event.target.value = app.draft.parameterPriority; refreshAction(); } });
       document.getElementById("default-provider").addEventListener("change", function (event) { if (app.draft) { app.draft.defaultProvider = event.target.value || null; refreshAction(); } });
       document.getElementById("routing-mode").addEventListener("change", function (event) { if (app.draft) { app.draft.routingMode = event.target.value; refreshAction(); } });
       document.getElementById("apply-button").addEventListener("click", function () { if (app.bridgeReady) applyViaBridge(); else generateOffline(); });
@@ -640,7 +656,7 @@
     }
     window.__wb3pSettingsInternals = Object.freeze({
       EFFORT_ORDER: EFFORT_ORDER.slice(), sortEfforts: sortEfforts, highestSupportedEffort: highestSupportedEffort,
-      effortOptionValues: effortOptionValues, extractState: extractState, makePatch: makePatch
+      effortOptionValues: effortOptionValues, normalizeParameterPriority: normalizeParameterPriority, extractState: extractState, makePatch: makePatch
     });
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize);
     else Promise.resolve().then(initialize);

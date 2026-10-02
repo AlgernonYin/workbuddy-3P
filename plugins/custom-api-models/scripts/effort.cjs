@@ -35,14 +35,14 @@ function mergeModel(...layers) {
   return result;
 }
 
-function capability(model) {
+function capability(model, providerThinking = false) {
   if (model.supportsReasoning !== true) return { supportedEfforts: [], reason: "model does not declare reasoning support" };
   const map = model.thinkingLevelMap;
   const providerCanDisableThinking = model.onlyReasoning !== true && model.reasoning?.canDisableThinking === true &&
     object(map) && map.off !== null && map.off !== undefined;
   // Native host's same-name Kimi K3 / DeepSeek V4.1 paths currently omit the provider thinking
   // toggle, so removing reasoning fields would silently keep provider thinking ON.
-  const canDisableThinking = providerCanDisableThinking && !["kimi-k3", "deepseek-v4.1-flash"].includes(model.id);
+  const canDisableThinking = providerCanDisableThinking && (providerThinking || !["kimi-k3", "deepseek-v4.1-flash"].includes(model.id));
   if (model.compat?.supportsReasoningEffort === false)
     return { supportedEfforts: [], canDisableThinking, providerCanDisableThinking, reason: "provider protocol declares effort unsupported; thinking toggle may still be supported" };
   const declared = model.reasoning?.supportedEfforts;
@@ -61,13 +61,13 @@ function preference(target, local, config, base) {
   return { level: base, source: "model" };
 }
 
-function applyEfforts(models, owner, local, config = {}) {
+function applyEfforts(models, owner, local, config = {}, providerThinking = false) {
   validatePreferences(local, true); validatePreferences(config);
   const info = [];
   for (const model of models) {
     const target = `${owner.get(model.id)}:${model.id}`;
     const base = model.reasoning?.defaultEffort ?? model.reasoning?.effort ?? null;
-    const cap = capability(model), pref = preference(target, local, config, base);
+    const cap = capability(model, providerThinking), pref = preference(target, local, config, base);
     const adjustable = pref.source !== "model";
     const accepted = adjustable && (cap.supportedEfforts.includes(pref.level) || ["off", "on"].includes(pref.level) && cap.canDisableThinking);
     if (adjustable && !accepted && pref.specific)

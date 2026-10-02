@@ -2,15 +2,15 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 2.4.0
+**Version:** 2.5.0
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets the model picker use an OpenAI-compatible API that you control. The web and mobile clients share the same cloud sandbox mechanism, so no client or web page changes are required.
 
 The plugin writes only the model configuration it manages. Existing user models whose IDs are not managed by the plugin are left in place.
 
-## Settings entry point (2.4)
+## Settings entry point (2.5)
 
-Ask **“Open WorkBuddy 3P settings”** or use `/models-settings`. On MCP Apps hosts the interactive panel lets you select a model, adjust its supported reasoning levels/input limit, switch official/third-party mode, and edit providers, extra models and routes. “Highest for all” chooses each model's highest valid level; it does not force the literal `max` everywhere. Input limits can be reduced/reset, not expanded beyond declared upstream capacity.
+Ask **“Open WorkBuddy 3P settings”** or use `/models-settings`. On MCP Apps hosts the interactive panel lets you select a model, adjust its supported reasoning levels/input limit, choose parameter priority (3P/native), switch official/third-party mode, and edit providers, extra models and routes. “Highest for all” chooses each model's highest valid level; it does not force the literal `max` everywhere. Input limits can be reduced/reset, not expanded beyond declared upstream capacity.
 
 `models_settings` supports `status`, `panel` and revision-guarded `apply`. Direct saving uses the standard MCP Apps host bridge: no webpage patching or public HTTP listener. Hosts without MCP Apps can use a chat question-tool wizard. The standalone HTML artifact is a **draft editor**: send its secret-free generated instruction back to the original chat to apply it. Preview/clipboard success is not a save receipt. An isolated browser fixture has verified bridge saves and mobile-size layout; official cloud/new-session and physical-phone acceptance must be verified separately, not inferred from host source support.
 
@@ -18,11 +18,23 @@ Updates use the existing routing lock, private backups and rollback for ordinary
 
 The panel never displays or accepts API key values. New provider forms use credential environment-variable names; keys remain in private runtime files/environment/account profiles. Changing an endpoint requires a new reference or explicit consent to reuse existing credentials.
 
-See the [per-model capability matrix](docs/model-capabilities.md) and [official window audit](docs/model-windows.md). Live Bailian checks on 2026-10-02 show that GLM-5/5.1 reject `max`; their highest supported level is `xhigh`, despite generalized documentation. Kimi K3 now exposes `low/high/max`. Overstated capacity on ten older models has also been corrected. Thinking-off is exposed only on verified host paths; Kimi K3, DeepSeek V4.1 Flash and MiniMax M3 do not expose unsupported native toggles. `thinking_budget` and `ultracode` are out of scope.
+See the [parameter priority and loopback contract](docs/parameter-priority.md), [per-model capability matrix](docs/model-capabilities.md) and [official window audit](docs/model-windows.md). Live Bailian checks on 2026-10-02 show that GLM-5/5.1 reject `max`; their highest supported level is `xhigh`, despite generalized documentation. Kimi K3 now exposes `low/high/max`. Overstated capacity on ten older models has also been corrected. Thinking-off is exposed only on verified host paths; Kimi K3, DeepSeek V4.1 Flash and MiniMax M3 do not expose unsupported native toggles. `thinking_budget` and `ultracode` are out of scope.
 
-**Activation limits:** effort levels are model defaults; native user/session effort overrides still win on reasoning-enabled entries. `off` disables reasoning capability for that custom slot without changing global settings; re-enable/reset it in the plugin to restore reasoning. A stale host catalog may require catalog refresh and model reselection; saving, resync or page reload alone is not runtime proof. Input limits persist in `workbuddy-3p.context.json` and change host model metadata; there is no universal provider `context_window` request parameter. Revisions use a process-local random-key HMAC, not a deterministic credential digest. Reopen old panels/drafts after MCP restart.
+**Activation limits:** in `3p` priority the cloud-host adapter enforces declared thinking parameters; in `native` priority session/user overrides can win. `off` disables the custom slot's native reasoning capability and, in `3p`, explicitly sends the supported provider toggle without changing global settings. A stale host catalog may require catalog refresh and model reselection; saving, resync or page reload alone is not runtime proof. Input limits persist in `workbuddy-3p.context.json` and change host model metadata; there is no universal provider `context_window` request parameter. Revisions use a process-local random-key HMAC. Reopen old panels/drafts after MCP restart.
 
 Private backup directories/files use `700`/`600` on Linux. Windows `chmod` is not an NTFS ACL: use an account-private directory and do not sync/share backups.
+
+## Parameter priority and host loopback (2.5)
+
+`state.parameterPriority` and `patch.parameterPriority` accept `3p` or `native`; missing state defaults to `3p`. Resolution is saved `workbuddy-3p.parameters.json` > `WB3P_PARAMETER_PRIORITY` > `3p`, with no hidden CLI default.
+
+`3p` keeps third-party requests on 3P declared parameters and starts/stops a shared Node loopback daemon inside the target cloud sandbox. The host caller uses an opaque proxy key; the proxy reads the private mode-600, gitignored state/runtime cache, uses the original upstream key only on the upstream Authorization request, and does not return it to the UI or session. Here `localhost` means that sandbox, not the assistant's Windows PC or a web/mobile client.
+
+`native` uses a native direct connection and disables 3P forced parameters. An old cache that still points at the loopback receives HTTP 410 and must reselect the model; it is not transparently passed through. `official` rejects proxy forwarding and has no third-party traffic.
+
+Active MCP sessions check the shared adapter every 45 seconds; an idle adapter exits after 30 minutes. A platform sleep/reclamation or forced process kill is not guaranteed to recover immediately. Request timeout defaults to 10 minutes (`WB3P_PARAMETER_TIMEOUT_MS`: 1000–1800000 ms), with 4 concurrent requests, 16 MiB per request and a shared 32 MiB upload-buffer limit. Mode changes affect newly authorized snapshots, not data already sent upstream. Keep private state/runtime/backups in a protected directory; loopback is not isolation against malicious root/same-user processes.
+
+Reasoning levels follow live `supportedEfforts`, `canDisableThinking` and protocol declarations; do not infer levels from `onlyReasoning`. Under `3p`, DeepSeek V4.1 Flash and Kimi K3 `off` can be forced by the proxy; the 2.4 native off limitation applies only to native paths. Input windows are local host input limits, not provider capacity expansion or verified context compression. Saving configuration is not HTTP success; `runtimeVerified:false` remains.
 
 ## How it works
 
@@ -267,9 +279,9 @@ The sandbox-local override file is `~/.codebuddy/workbuddy-3p.effort.json`. It c
 
 Requested levels are validated against model capability metadata. A default/global change skips unsupported models and lists them; a single-model change rejects an unsupported level. No fixed provider support table is provided here because support is model- and configuration-specific. Use `models_effort` status for the configured set instead of inferring broad provider capability.
 
-These values are model defaults. A native session or user `reasoningEffort` can take precedence. In official mode, the plugin does not modify the host's native global `reasoningEffort` or official parameters; effort settings are saved as deferred configuration and applied after switching back to third-party. Status is configuration/disk state, not proof of an actual request (`runtimeVerified: false`). After the host reloads, the model may need to be reselected.
+These values are model defaults. In `native` priority a session/user `reasoningEffort` can take precedence; `3p` enforces declared provider parameters in the adapter. Official mode does not modify native global settings or official parameters; effort settings are deferred until third-party mode resumes. Status is configuration/disk state, not proof of an actual request (`runtimeVerified: false`). After the host reloads, the model may need to be reselected.
 
-**Refresh the host model catalog before reselecting.** Cloud web testing on 2026-10-01 found that saving `xhigh`, running `models_resync`, and reselecting alone still sent `medium`, consistent with stale host model-catalog metadata/state. After the official host model-catalog refresh and reselection, the same session sent `xhigh` and Bailian completed the request (HTTP 200). The plugin cannot force this host refresh through its MCP tool. Use the host's official model-catalog refresh/reload path, then reselect; reopen only if required by the host. Reopening the web page alone has not been verified as equivalent. Do not assume that typing `/reload-plugins` into a web chat executes a native command. Disk status and a successful reply alone are not proof of the requested effort. Mobile remains unverified.
+**Refresh/reselect when the host retains stale metadata.** A 2026-10-01 session sent `xhigh` after an official catalog refresh. However, the latest 2.4 cloud test on 2026-10-02 still sent `medium` despite a saved `xhigh`; HTTP 202 from refresh confirmed acceptance only, not completion. That is why 2.5 adds explicit `3p` parameter priority. Do not treat a historical success, a refresh acknowledgment, disk status or a normal reply as current parameter proof. The production 2.5 web chain and a real mobile device require independent verification.
 
 Local effort settings persist only in that sandbox and do not automatically sync to the account. To make the same default apply to new sandboxes, put `effort` under the account-private profile's `config`, then package and upload the profile. Do not put API keys or the profile in a public location. Mobile shares the cloud mechanism, but has not been verified on a real device.
 
@@ -383,7 +395,7 @@ node scripts/sync-models.cjs --effort-reset --all
 | `--doctor` | Official mode returns skipped and sends no third-party requests; a high-priority official switch skips before damaged provider/profile config is loaded. Third-party mode sends one tiny request per planned model; those requests are billable and can consume quota. It returns only HTTP status and elapsed time, never response bodies or keys. |
 | `--official` / `--third-party` | Persist the per-sandbox switch and sync. |
 | `--switch clear` | Remove the per-sandbox switch and follow the lower-priority sources. |
-| `--status` | Report `configuredMode`, source, `modelsJsonActive`/`active` (on-disk entries), `runtimeVerified` (always `false`), and the last error. Provider endpoint reporting is limited to `host`. |
+| `--status` | Report `configuredMode`, `parameterPriority`/`parameterAdapter`, source, `modelsJsonActive`/`active` (on-disk entries), `runtimeVerified` (always `false`), and the last error. Provider endpoint reporting is limited to `host`. |
 | `--uninstall` | Remove entries recorded in ownership state and generated allowlist entries; keep other user models. Refuse invalid state or a missing state alongside the ownership marker. |
 | `--quiet` | Suppress normal JSON output. Errors still go to stderr. Effort commands retain a non-zero failure exit code; other commands use `0` for the `SessionStart` hook. |
 | `--effort-status [--model ...]` | Report effort configuration and effective source for all configured models, or only the named model. This is config/disk state, not live request proof (`runtimeVerified: false`). |
@@ -394,7 +406,7 @@ The stdio MCP server provides:
 
 | Tool | Behavior |
 | --- | --- |
-| `models_status` | Report `configuredMode`, source, on-disk `modelsJsonActive`/`active`, `runtimeVerified` (always `false`), managed count, and the last error. Provider endpoint reporting is limited to `host`. |
+| `models_status` | Report `configuredMode`, `parameterPriority`/`parameterAdapter`, source, on-disk `modelsJsonActive`/`active`, `runtimeVerified` (always `false`), managed count, and the last error. Provider endpoint reporting is limited to `host`. |
 | `models_switch` | Set this sandbox to `official` or `third-party`, or use `default` to clear the switch. |
 | `models_resync` | Re-read the config and rewrite `models.json`. |
 | `models_doctor` | Official mode skips with no third-party requests. Third-party mode sends one tiny billable request per planned model and reports HTTP status and elapsed time. |
@@ -461,7 +473,7 @@ or restore the first pre-change backup:
 From the repository root:
 
 ```bash
-node --test tests/*.test.cjs
+node --test --test-concurrency=2 tests/*.test.cjs
 ```
 
 ## License

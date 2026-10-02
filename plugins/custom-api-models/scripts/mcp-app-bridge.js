@@ -32,7 +32,7 @@
     get available() { return connected; },
     connect() {
       if (window.parent === window) return Promise.resolve(false);
-      return connecting ||= request("ui/initialize", { appInfo: { name: "workbuddy-3p-settings", version: "2.4.0" },
+      return connecting ||= request("ui/initialize", { appInfo: { name: "workbuddy-3p-settings", version: "2.5.0" },
         appCapabilities: {}, protocolVersion: "2026-01-26" }, 4000).then(result => {
         connected = !!result?.hostCapabilities?.serverTools;
         send({ method: "ui/notifications/initialized", params: {} });

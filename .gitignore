@@ -12,3 +12,6 @@ workbuddy-3p.effort.json
 workbuddy-3p.context.json
 workbuddy-3p.backups/
 workbuddy-3p-settings.html
+workbuddy-3p.parameters.json
+workbuddy-3p.runtime.json
+workbuddy-3p.state.json

@@ -3,7 +3,7 @@
 // Writes only the plugin-managed part of ~/.codebuddy/models.json; user-defined entries are preserved.
 "use strict";
 const fs = require("fs"), path = require("path"), os = require("os");
-const fingerprint = (cfg, mode, prefs, limits) => require("crypto").createHash("sha256").update(JSON.stringify([cfg, mode, prefs, limits])).digest("hex");
+const fingerprint = (cfg, mode, prefs, limits, parameters) => require("crypto").createHash("sha256").update(JSON.stringify([cfg, mode, prefs, limits, parameters])).digest("hex");
 const ROOT = path.resolve(__dirname, "..");
 const PRESETS = path.join(ROOT, "presets");
 const presetFingerprint = () => require("crypto").createHash("sha256").update(JSON.stringify(fs.readdirSync(PRESETS)
@@ -12,6 +12,8 @@ const ENV = process.env;
 const MODES = ["same-name", "preset-only", "explicit"];
 const effort = require("./effort.cjs");
 const context = require("./context.cjs");
+const parameters = require("./parameters.cjs");
+const runtime = require("./parameter-runtime.cjs");
 
 class ConfigError extends Error {}
 const fail = (msg) => { throw new ConfigError(msg); };
@@ -26,6 +28,8 @@ const paths = (dir = configDir()) => ({
   lastError: path.join(dir, "workbuddy-3p.last-error.json"), backup: path.join(dir, "models.json.bak-workbuddy-3p"),
   effort: path.join(dir, "workbuddy-3p.effort.json"),
   context: path.join(dir, "workbuddy-3p.context.json"),
+  parameters: path.join(dir, "workbuddy-3p.parameters.json"),
+  runtime: path.join(dir, "workbuddy-3p.runtime.json"),
 });
 
 // Missing file -> null. Existing but unreadable/invalid -> error (never silently ignored).
@@ -225,7 +229,8 @@ function effortReport(plan, cfg, local, sw, current, state, selector) {
     orphanedTargets: plan.effort.orphanedTargets,
     profileConfigPatch: { effort: { ...(profileDefault !== undefined ? { default: profileDefault } : {}),
       ...(Object.keys(profileModels).length ? { models: profileModels } : {}) } },
-    note: "These are third-party model defaults, not verified request parameters. Native session/user reasoningEffort overrides take precedence. Local changes do not synchronize the account or other sandboxes." };
+    parameterPriority: parameters.read(paths()).priority,
+    note: "Third-party preferences, not runtime proof. In 3p priority the plugin-host adapter enforces declared thinking parameters; in native priority session/user overrides win. Local changes do not synchronize other sandboxes." };
 }
 
 async function effortContext(p, local) {
@@ -450,7 +455,8 @@ async function buildPlan(cfg, dir, prev, opts = {}) {
   const keep = [...new Set([...(OFFICIAL.keepOfficial || []), ...(OFFICIAL.routable || []), ...keepOfficial])].filter(id => !hideOfficial.has(id));
   const models = [...entries.values()];
   const local = opts.preferences ?? readEffort(paths(dir));
-  const appliedEffort = effort.applyEfforts(models, owner, local, cfg.effort || {});
+  const appliedEffort = effort.applyEfforts(models, owner, local, cfg.effort || {},
+    (opts.parameterPriority ?? parameters.read(paths(dir)).priority) === "3p");
   const inputLimits = context.apply(models, owner, opts.contextPreferences ?? readJsonStrict(paths(dir).context, "local context preferences") ?? { version: 1 });
   return { models, owner, routed, extra, keep, hideOfficial: [...hideOfficial], warnings, providers: P, mode, effort: appliedEffort, contexts: inputLimits };
 }
@@ -471,14 +477,22 @@ function readState(p) {
   const strings = x => Array.isArray(x) && x.every(v => typeof v === "string");
   if (!isObj(s) || !strings(s.managed) || !strings(s.allow) || !strings(s.hidden) ||
       !Array.isArray(s.displaced) || !s.displaced.every(m => isObj(m) && typeof m.id === "string") ||
-      !isObj(s.providers) || !Object.values(s.providers).every(v => isObj(v) && typeof v.url === "string" && strings(v.modelIds)) ||
+      !isObj(s.providers) || !Object.values(s.providers).every(v => isObj(v) && typeof v.url === "string" && strings(v.modelIds) &&
+        (v.apiKey === undefined || typeof v.apiKey === "string" && v.apiKey.length > 0 && v.apiKey.length < 16384)) ||
+      (s.parameterProxy !== undefined && (!isObj(s.parameterProxy) || !/^[a-f0-9]{64}$/.test(s.parameterProxy.serverId) ||
+        !Number.isInteger(s.parameterProxy.port) || s.parameterProxy.port < 1 || s.parameterProxy.port > 65535)) ||
       (s.hadAllowlist !== undefined && typeof s.hadAllowlist !== "boolean"))
     fail("invalid ownership state; restore a backup before changing routing");
-  return { managed: s.managed || [], allow: s.allow || [], hidden: s.hidden || [], displaced: s.displaced || [], providers: s.providers || {}, hadAllowlist: s.hadAllowlist };
+  return { managed: s.managed || [], allow: s.allow || [], hidden: s.hidden || [], displaced: s.displaced || [], providers: s.providers || {}, hadAllowlist: s.hadAllowlist,
+    ...(s.parameterProxy ? { parameterProxy: s.parameterProxy } : {}) };
 }
 function prevKeys(cur, state) {
   const keys = {};
   for (const [n, info] of Object.entries(state.providers)) {
+    // Private original credentials are bound to their provider AND original
+    // normalized endpoint. Never reuse an opaque loopback token upstream.
+    if (info.apiKey) { keys[n] = info.apiKey; continue; }
+    if (state.parameterProxy) continue;
     const m = (cur.models || []).find(x => x && (info.modelIds || []).includes(x.id) && x.url === info.url && x.apiKey);
     if (m) keys[n] = m.apiKey;
   }
@@ -587,11 +601,17 @@ async function syncUnlocked(opts, p) {
     return { ok: true, ...base, active: false, reason, changed };
   }
 
-  if (opts.preparedPlan && opts.preparedFingerprint !== fingerprint(cfg, sw.mode, readEffort(p), readJsonStrict(p.context, "local context preferences") || { version: 1 }))
+  const params = parameters.read(p);
+  if (opts.preparedPlan && opts.preparedFingerprint !== fingerprint(cfg, sw.mode, readEffort(p), readJsonStrict(p.context, "local context preferences") || { version: 1 }, params))
     fail("configuration changed before routing commit; prepared plan rejected");
   const plan = opts.preparedPlan || await buildPlan(clone(cfg), p.dir, prevKeys(cur, state));
   const summary = { ok: plan.warnings.length === 0, partial: plan.warnings.length > 0 && plan.models.length > 0, ...base, active: plan.models.length > 0, ...publicSummary(plan) };
   if (opts.dryRun) return { ...summary, plan };
+
+  const adapter = params.priority === "3p" && plan.models.length ? await runtime.ensure(p, writeAtomic) : null;
+  const projected = plan.models.map(m => adapter ? { ...m, ...runtime.projection(adapter, m.id) } : m);
+  summary.parameterPriority = params.priority;
+  summary.parameterAdapter = adapter ? "plugin-host-loopback" : "disabled";
 
   // Start from a clean baseline (our previous changes undone), then apply the new plan.
   const baseCur = stripManaged(cur, state);
@@ -602,7 +622,7 @@ async function syncUnlocked(opts, p) {
   for (const m of displaced) summary.warnings.push(`user model ${m.id} is replaced while the plugin is active (restored on uninstall/official)`);
   if (displaced.length) summary.ok = false;
 
-  const out = { ...baseCur, models: [...user, ...plan.models] };
+  const out = { ...baseCur, models: [...user, ...projected] };
   if (plan.models.length) out.workbuddy3pManaged = { version: 1, ids: [...mineIds] };
   const hide = new Set(plan.hideOfficial);
   const userAllow = hadAllowlist ? baseCur.availableModels : [];
@@ -612,10 +632,12 @@ async function syncUnlocked(opts, p) {
   if (plan.models.length) out.availableModels = allow;
 
   const providersState = {};
-  for (const [id, prov] of plan.owner) (providersState[prov] = providersState[prov] || { url: plan.providers[prov].url, modelIds: [] }).modelIds.push(id);
+  for (const [id, prov] of plan.owner) (providersState[prov] = providersState[prov] || { url: plan.providers[prov].url, modelIds: [],
+    ...(adapter ? { apiKey: plan.providers[prov].key } : {}) }).modelIds.push(id);
   const newState = plan.models.length ? {
     managed: [...mineIds], allow: allow.filter(x => !keptUser.includes(x)), hidden, displaced, providers: providersState,
     hadAllowlist, updatedAt: new Date().toISOString(),
+    ...(adapter ? { parameterProxy: { serverId: adapter.serverId, port: adapter.port } } : {}),
   } : null;
   const changed = commitRouting(p, before, out, newState);
   return { ...summary, changed };
@@ -647,11 +669,12 @@ function uninstall() {
 function status() {
   const p = paths();
   let state, current, cfg = null, from = "none", sw = null, err = null, active = null;
-  let managedModels = null;
+  let managedModels = null, priority = null;
   try {
     sw = resolveSwitch(p.dir, null);
     state = readState(p); current = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null);
     checkOwnership(current, state);
+    priority = parameters.read(p).priority;
     active = (current.models || []).some(m => state.managed.includes(m.id));
     managedModels = (current.models || []).filter(m => state.managed.includes(m.id)).length;
     if (sw.mode !== "official") { ({ cfg, from } = loadConfig(p.dir)); if (from !== "none") validateConfig(cfg); sw = resolveSwitch(p.dir, cfg); }
@@ -659,6 +682,7 @@ function status() {
   return { ok: !err, configuredMode: sw?.mode, switch: sw?.mode, switchFrom: sw?.from, config: from,
            active, modelsJsonActive: active, runtimeVerified: false,
            managedModels,
+           parameterPriority: priority, parameterAdapterConfigured: !!state?.parameterProxy,
            hiddenOfficial: state?.hidden || [], lastError: err ? { error: err } : readJsonLoose(p.lastError) };
 }
 
@@ -685,11 +709,64 @@ async function doctor() {
   return { ok: res.every(r => r.ok), warnings: plan.warnings, results: res };
 }
 
-const settings = require("./settings.cjs")({ loadConfig, resolveSwitch, readEffort, buildPlan, parseModels, readState,
+// No HTTP control interface: the daemon reads an immutable private route snapshot
+// under the same lock as settings, sync, mode switch and rollback.
+function runtimeMode(p) {
+  try {
+    const override = resolveSwitch(p.dir, null);
+    if (override.mode === "official") return "official"; // Escape hatch never loads private config.
+    const { cfg } = loadConfig(p.dir);
+    if (!cfg) return "unavailable";
+    validateConfig(cfg);
+    return resolveSwitch(p.dir, cfg).mode;
+  } catch { return "unavailable"; } // Stale bindings fail closed on missing/invalid config.
+}
+async function proxyRouteSnapshot(id, serverId) {
+  const p = paths();
+  return withLock(p.dir, () => {
+    if (runtimeMode(p) !== "third-party") return null;
+    const state = readState(p), reg = runtime.read(p);
+    if (!state.parameterProxy || state.parameterProxy.serverId !== serverId || reg?.serverId !== serverId ||
+        reg.port !== state.parameterProxy.port || !state.managed.includes(id)) return null;
+    const cur = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null);
+    checkOwnership(cur, state);
+    const m = cur.models?.find(m => m.id === id), binding = runtime.projection(reg, id);
+    if (!m || m.url !== binding.url || m.apiKey !== binding.apiKey) return null;
+    const provider = Object.values(state.providers).find(v => v.modelIds.includes(id));
+    if (!provider?.apiKey) return null;
+    const priority = parameters.read(p).priority;
+    return { model: { ...m, url: provider.url, apiKey: provider.apiKey }, url: provider.url, apiKey: provider.apiKey, priority };
+  });
+}
+async function retireProxyRuntime(serverId) {
+  const p = paths();
+  return withLock(p.dir, () => {
+    // Teardown NEVER changes models/state or downgrades 3p to direct/native.
+    // Only a committed native/official routing transaction may do that.
+    // Preserve opaque dead bindings for fail-closed recovery on the next sync.
+    if (runtime.read(p)?.serverId === serverId) fs.rmSync(p.runtime, { force: true });
+  });
+}
+async function runtimeHeartbeat() { try { return await runtime.heartbeat(paths()); } catch { return false; } }
+async function maintainRuntime() {
+  const p = paths();
+  return withLock(p.dir, async () => {
+    const mode = runtimeMode(p);
+    if (mode === "unavailable") return;
+    const state = readState(p);
+    if (!state.managed.length) return;
+    if (mode === "official") return syncUnlocked({}, p);
+    if (parameters.read(p).priority !== "3p") return;
+    if (!await runtime.heartbeat(p)) return syncUnlocked({}, p);
+  });
+}
+
+const settings = require("./settings.cjs")({ loadConfig, resolveSwitch, readEffort, readParameters: parameters.read, buildPlan, parseModels, readState,
   checkOwnership, prevKeys, writeAtomic, writeAtomicChecked: writeAtomic, syncUnlocked, fingerprint, presetFingerprint });
 async function settingsStatus() { const p = paths(); return withLock(p.dir, () => settings.viewUnlocked(p)); }
 async function applySettings(args) { const p = paths(); return withLock(p.dir, () => settings.applyUnlocked(p, args)); }
-module.exports = { sync, uninstall, doctor, status, setSwitch, effortStatus, setEffort, settingsStatus, applySettings, ConfigError };
+module.exports = { sync, uninstall, doctor, status, setSwitch, effortStatus, setEffort, settingsStatus, applySettings, ConfigError,
+  proxyRouteSnapshot, retireProxyRuntime, runtimeHeartbeat, maintainRuntime, runtimePaths: paths, runtimeWrite: writeAtomic, runtimeLock: withLock };
 
 if (require.main === module) {
   const a = process.argv.slice(2), quiet = a.includes("--quiet");

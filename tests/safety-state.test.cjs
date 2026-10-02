@@ -9,6 +9,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const env = { ...process.env, CODEBUDDY_CONFIG_DIR: dir };
   for (const k of Object.keys(env)) if (/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)) delete env[k];
+  env.WB3P_PARAMETER_PRIORITY = "native";
   const file = name => path.join(dir, name);
   const cfg = { mode: "explicit", providers: { p: { baseUrl: "https://test.invalid/v1", apiKey: "fake-only-canary" } }, routes: { "glm-5.3": "first" } };
   const put = (name, v) => fs.writeFileSync(file(name), typeof v === "string" ? v : JSON.stringify(v));
@@ -125,7 +126,7 @@ test("stdio MCP exposes truthful disk status and switching/doctor behavior", t =
   });
   assert.equal(r.status, 0, r.stderr); assert.ok(!r.stdout.includes("fake-only-canary"));
   const replies = r.stdout.trim().split("\n").map(JSON.parse);
-  assert.equal(replies[0].result.serverInfo.version, "2.4.0");
+  assert.equal(replies[0].result.serverInfo.version, "2.5.0");
   const result = id => JSON.parse(replies.find(r => r.id === id).result.content[0].text);
   assert.equal(result(2).active, false); assert.equal(result(3).skipped, true);
   assert.equal(result(2).requiresModelReselection, true); assert.match(result(2).note, /before|Before/);

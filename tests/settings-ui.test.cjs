@@ -38,6 +38,7 @@ function fixtureState() {
   return {
     revision: 7,
     configuredMode: "third-party",
+    parameterPriority: "3p",
     sourceKind: "local",
     readOnly: false,
     defaultProvider: "p",
@@ -148,6 +149,19 @@ test("state extraction accepts direct, nested bridge, and tool-result shapes", (
   assert.equal(internals.extractState({ hello: "world" }), null);
 });
 
+test("parameter priority defaults to 3p and is patched only when changed", () => {
+  const internals = loadInternals();
+  assert.equal(internals.normalizeParameterPriority(undefined), "3p");
+  assert.equal(internals.normalizeParameterPriority("native"), "native");
+  assert.equal(internals.normalizeParameterPriority("unexpected"), "3p");
+
+  const original = fixtureState();
+  assert.deepEqual(JSON.parse(JSON.stringify(internals.makePatch(original, clone(original)))), {});
+  const draft = clone(original);
+  draft.parameterPriority = "native";
+  assert.deepEqual(JSON.parse(JSON.stringify(internals.makePatch(original, draft))), { parameterPriority: "native" });
+});
+
 test("patch builder sends only changed fields and preserves null semantics", () => {
   const internals = loadInternals();
   const original = fixtureState();
@@ -240,9 +254,16 @@ test("provider edits do not erase an untouched environment variable name", () =>
   assert.equal(Object.prototype.hasOwnProperty.call(patch.providers.p, "apiKeyEnv"), false);
 });
 
+test("mobile layout declares bounded grid and no horizontal overflow", () => {
+  assert.match(html, /html,\s*body\s*\{[^}]*max-width:\s*100%[^}]*overflow-x:\s*hidden/s);
+  assert.match(html, /\.shell\s*\{[^}]*max-width:\s*100%[^}]*min-width:\s*0/s);
+  assert.match(html, /@media\s*\(max-width:\s*700px\)[\s\S]*?grid-template-columns:\s*1fr;/);
+});
+
 test("required labels and form controls are present for providers and routes", () => {
   for (const label of [
     "Provider ID", "显示名称 label", "Base URL", "Preset", "API Key 环境变量名", "额外模型",
+    "参数优先级", "3P 优先", "宿主原生优先", "原生直连", "自运行回环参数适配",
     "路由别名 alias", "路由目标 target", "默认 Provider", "路由模式", "思考档位", "最大输入 token",
     "更换地址时复用原凭据",
   ]) assert.match(html, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -255,4 +276,5 @@ test("required labels and form controls are present for providers and routes", (
   assert.match(html, /更换地址时复用原凭据/);
   assert.match(html, /bridge\.callTool\(\{ action: "status" \}\)/);
   assert.match(html, /structuredContent/);
+  assert.match(html, /旧缓存代理返回 410/);
 });

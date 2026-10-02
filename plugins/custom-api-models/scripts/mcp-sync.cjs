@@ -4,25 +4,36 @@
 "use strict";
 const lib = require("./sync-models.cjs");
 const panel = require("./settings-panel.cjs");
-const VERSION = "2.4.0";
+const VERSION = "2.5.0";
 const errOut = (e) => ({ ok: false, error: String(e && e.message || e) });
 let status = { ok: false, reason: "pending" };
 const ready = lib.sync().catch(errOut).then(s => { status = s; });
+// Independent MCP sessions share the cloud-host daemon. EOF ends only this
+// lease, not other sessions' streams. Requests/other MCP leases keep it alive.
+let maintenance = false;
+const heartbeat = setInterval(async () => {
+  if (maintenance) return; maintenance = true;
+  try { const result = await lib.maintainRuntime(); if (result) status = result; }
+  catch (e) { status = errOut(e); }
+  finally { maintenance = false; }
+}, 45000);
+heartbeat.unref();
 const send = (m) => process.stdout.write(JSON.stringify(m) + "\n");
 const noArgs = { type: "object", properties: {} };
 const TOOLS = [
-  { name: "models_settings", description: "Open the WorkBuddy 3P interactive settings panel, or inspect/apply secret-free structured settings. Supports model-specific thinking/off where declared, highest-supported-per-model, bounded input context, providers and custom routes, official/third-party switch. status is read-only; apply requires a fresh revision and creates private backups under the existing routing lock. API keys are never accepted/returned: preserve existing credentials or use apiKeyEnv. Never expand provider context capacity. Changes are sandbox-local, native overrides still win, host catalog refresh and model reselection may be required. On hosts without MCP Apps use /models-settings chat wizard or panel artifact (draft only).",
+  { name: "models_settings", description: "Open the WorkBuddy 3P interactive settings panel, or inspect/apply secret-free structured settings. Supports model-specific thinking/off where declared, highest-supported-per-model, bounded input context, providers and custom routes, official/third-party switch. status is read-only; apply requires a fresh revision and creates private backups under the existing routing lock. API keys are never accepted/returned: preserve existing credentials or use apiKeyEnv. Never expand provider context capacity. Changes are sandbox-local; 3p priority enforces declared parameters in an adapter running on THIS plugin host, native priority allows host overrides. Host refresh and model reselection may be required. On hosts without MCP Apps use /models-settings chat wizard or panel artifact (draft only).",
     _meta: { ui: { resourceUri: panel.URI } },
     inputSchema: { type: "object", additionalProperties: false, properties: {
       action: { type: "string", enum: ["status", "panel", "apply"], default: "status" },
       expectedRevision: { type: "string" }, patch: { type: "object", additionalProperties: false,
         properties: { switchMode: { enum: ["official", "third-party", "default"] },
+          parameterPriority: { enum: ["3p", "native"] },
           maxEffort: { type: "boolean" }, efforts: { type: "object", additionalProperties: { type: ["string", "null"] } },
           contexts: { type: "object", additionalProperties: { type: ["integer", "null"] } },
           providers: { type: "object" }, routes: { type: "object", additionalProperties: { type: ["string", "null"] } },
           defaultProvider: { type: "string" }, routingMode: { enum: ["same-name", "preset-only", "explicit"] } } }
     } } },
-  { name: "models_effort", description: "Inspect, set or reset persistent third-party MODEL DEFAULT effort, not native session/global settings. The status operation itself does not resolve credentials or send provider/model requests; MCP startup still performs normal routing sync. A sandbox default skips unsupported models; model-specific settings reject unsupported levels. Local settings persist only in this sandbox; profileConfigPatch can be merged into an account-private profile for future sandboxes (not automatically uploaded). Native reasoningEffort overrides win. Official mode only saves deferred preferences. When requiresModelReselection=true, reselect the model after the host reloads; runtimeVerified=false.",
+  { name: "models_effort", description: "Inspect, set or reset persistent third-party MODEL DEFAULT effort, not native session/global settings. The status operation itself does not resolve credentials or send provider/model requests; MCP startup still performs normal routing sync. A sandbox default skips unsupported models; model-specific settings reject unsupported levels. Local settings persist only in this sandbox; profileConfigPatch can be merged into an account-private profile for future sandboxes (not automatically uploaded). In 3p priority the plugin-host adapter enforces declared effort; in native priority host overrides win. Official mode only saves deferred preferences. When requiresModelReselection=true, reselect the model after the host reloads; runtimeVerified=false.",
     inputSchema: { type: "object", additionalProperties: false, properties: {
       action: { type: "string", enum: ["status", "set", "reset"], default: "status" },
       scope: { type: "string", enum: ["default", "model", "all"], description: "Set default or one model; all is reset-only." },
@@ -95,4 +106,4 @@ async function handle(d) {
 }
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (d) => { chain = chain.then(() => handle(d)); });
-process.stdin.on("end", () => { chain.then(() => ready).then(() => process.exit(0)); });
+process.stdin.on("end", () => { chain.then(() => ready).then(() => { clearInterval(heartbeat); process.exit(0); }); });
