@@ -8,11 +8,11 @@ const settingsScript=path.resolve(__dirname,'../plugins/custom-api-models/script
 const canary='FAKE_GLOBAL_SETTINGS_KEY_CANARY';
 const connection={kind:'workbuddy-account',origin:account.ORIGIN,accountId:'owner',credentials:{accessToken:'FAKE_ACCOUNT_TOKEN',refreshToken:'FAKE_REFRESH',expiresAt:Date.now()+3600000}};
 function cfg(){return{mode:'explicit',enabled:'official',parameterPriority:'native',providers:{p:{baseUrl:'https://api.example.invalid/v1',apiKey:canary,extraModels:['m'],models:{m:{maxInputTokens:64000,supportsReasoning:true,compat:{thinkingFormat:'openai',supportsReasoningEffort:true},reasoning:{supportedEfforts:['low','high'],defaultEffort:'low',canDisableThinking:true},thinkingLevelMap:{low:'low',high:'high',off:'none'}}}}},routes:{'glm-5.1':'p:m'}};}
-function fixture(t,{connectedOnly=false,partial=false}={}){
+function fixture(t,{connectedOnly=false,partial=false,remoteExists=true}={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'wb3p-global-settings-')),previousEnv={...process.env},priorFetch=global.fetch;
  for(const k of Object.keys(process.env))if(/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k))delete process.env[k];
  process.env.CODEBUDDY_CONFIG_DIR=dir;
- let remote={kind:'workbuddy-3p-private-profile',version:1,config:cfg(),accountSync:structuredClone(connection),accountRevision:'rev-0'},version='1.0.0',preflightHook;
+ let remote={kind:'workbuddy-3p-private-profile',version:1,config:cfg(),accountSync:structuredClone(connection),accountRevision:'rev-0'},version='1.0.0',preflightHook,present=remoteExists;
  if(connectedOnly){fs.writeFileSync(account.connectionPath({dir}),JSON.stringify(connection));fs.writeFileSync(path.join(dir,'workbuddy-3p.json'),JSON.stringify(cfg()));}
  else fs.writeFileSync(account.cachePath({dir}),JSON.stringify({...remote,cloudVersion:version,cloudUid:'uid'}));
  const response=d=>new Response(JSON.stringify({code:0,data:d}));
@@ -24,9 +24,9 @@ function fixture(t,{connectedOnly=false,partial=false}={}){
   if(url.endsWith('/account'))return response({uid:'owner'});
   if(url.includes('/download-url'))return response({download_url:'https://test.cos.accelerate.myqcloud.com/private'});
   if(url.includes('/preflight')){preflightHook?.();return response({can_upload:true,need_confirmation:false});}
-  if(o.method==='POST'&&url.endsWith('/content')){remote=packages.unpack(Buffer.from(await o.body.get('file').arrayBuffer()));version='1.0.'+(Number(version.split('.')[2])+1);return response({uid:'uid'});}
+  if(o.method==='POST'&&url.endsWith('/content')){remote=packages.unpack(Buffer.from(await o.body.get('file').arrayBuffer()));version=present?'1.0.'+(Number(version.split('.')[2])+1):'1.0.0';present=true;return response({uid:'uid'});}
   if(url.includes('/content/uid?'))return response({uid:'uid',name:'workbuddy-3p-profile',version,status:'ready'});
-  return response({items:[{uid:'uid',name:'workbuddy-3p-profile',entity_type:'skill',version,status:'ready'}],total:1});
+  return response({items:present?[{uid:'uid',name:'workbuddy-3p-profile',entity_type:'skill',version,status:'ready'}]:[],total:present?1:0});
  };
  const factory=require(settingsScript);
  if(partial)require.cache[settingsScript].exports=core=>({...factory(core),adoptAccount:async()=>({ok:false,partial:true,warnings:['injected local incomplete routing']})});
@@ -46,18 +46,36 @@ test('settings default is an account commit plus complete local adoption, not a 
 test('merely connecting and reading account status never hides existing session config/switch',async t=>{
  const f=fixture(t,{connectedOnly:true});const c=cfg();c.providers.p.label='Local label';f.setLocal(c);fs.writeFileSync(path.join(f.dir,'workbuddy-3p.switch'),'official\n');
  const s=await f.view({scope:'session'});assert.equal(s.providers[0].label,'Local label');assert.equal(s.configuredMode,'official');assert.equal(s.sourceKind,'file');
- const global=await f.view();assert.deepEqual(global.providers,[]);assert.equal(global.canImportSession,true);assert.equal(global.scope,'account');
+ const global=await f.view();assert.equal(global.providers[0].label,'');assert.equal(global.canImportSession,false);assert.equal(global.scope,'account');
  assert.equal(account.cached({dir:f.dir}).connectionOnly,true);assert.equal(fs.existsSync(path.join(f.dir,'workbuddy-3p.scope.json')),false);
 });
 test('host credential references are privately resolved into portable account settings',async t=>{
- const f=fixture(t,{connectedOnly:true});const c=cfg();delete c.providers.p.apiKey;c.providers.p.apiKeyEnv='WB3P_TEST_PORTABLE_KEY';f.setLocal(c);process.env.WB3P_TEST_PORTABLE_KEY=canary;
+ const f=fixture(t,{connectedOnly:true,remoteExists:false});const c=cfg();delete c.providers.p.apiKey;c.providers.p.apiKeyEnv='WB3P_TEST_PORTABLE_KEY';f.setLocal(c);process.env.WB3P_TEST_PORTABLE_KEY=canary;
  const r=await f.save({providers:{p:{label:'Portable'}}},{importSession:true});assert.equal(r.accountCommitted,true);
  assert.equal(f.remote().config.providers.p.apiKey,canary);assert.equal(f.remote().config.providers.p.apiKeyEnv,undefined);
  delete process.env.WB3P_TEST_PORTABLE_KEY;assert.equal((await f.view()).providers[0].credential.kind,'inline');
 });
+
+test('connection-only runtime still exposes the existing remote baseline, and label-only save preserves all global data',async t=>{
+ const f=fixture(t,{connectedOnly:true});const remote=cfg();remote.providers.p.label='Remote A';remote.effort={default:'low',models:{'p:m':'low'}};remote.context={version:1,models:{'p:m':64000}};
+ remote.providers.q=structuredClone(remote.providers.p);remote.providers.q.label='Another provider';f.changeRemote(remote);
+ const local=cfg();local.enabled='third-party';local.parameterPriority='3p';local.effort={default:'high'};local.context={version:1,models:{'p:m':32000}};local.providers.p.label='Session only';f.setLocal(local);
+ const s=await f.view();assert.equal(s.providers[0].label,'Remote A');assert.equal(s.canImportSession,false);assert.equal(account.cached({dir:f.dir}).connectionOnly,true);
+ assert.equal(f.lib.status().configuredMode,'third-party');assert.equal(fs.existsSync(path.join(f.dir,'workbuddy-3p.scope.json')),false);
+ await assert.rejects(f.lib.applySettings({action:'apply',expectedRevision:s.revision,patch:{},importSession:true}),/baseline already exists/);
+ const expected=structuredClone(remote);expected.providers.p.label='Edited A';const r=await f.save({providers:{p:{label:'Edited A'}}});
+ assert.equal(r.accountCommitted,true);assert.equal(r.localSynced,true);assert.deepEqual(f.remote().config,expected);
+ assert.equal(account.cached({dir:f.dir}).connectionOnly,undefined);assert.equal(f.lib.status().configuredMode,'official');
+});
+
+test('first publication is empty until explicit import, when no remote baseline exists',async t=>{
+ const f=fixture(t,{connectedOnly:true,remoteExists:false});const s=await f.view();assert.deepEqual(s.providers,[]);assert.equal(s.canImportSession,true);
+ const r=await f.save({},{importSession:true});assert.equal(r.accountCommitted,true);assert.equal(r.localSynced,true);assert.equal((await f.view()).canImportSession,false);
+ assert.equal(f.remote().config.providers.p.apiKey,canary);assert.equal(f.remote().config.routes['glm-5.1'],'p:m');
+});
 test('a source changed during publication stays intact and yields committed plus local sync pending',async t=>{
  const f=fixture(t,{connectedOnly:true});const external=cfg();external.providers.p.label='Concurrent edit';
- f.preflight(()=>f.setLocal(external));const r=await f.save({providers:{p:{label:'Published snapshot'}}},{importSession:true});
+ f.preflight(()=>f.setLocal(external));const r=await f.save({providers:{p:{label:'Published snapshot'}}});
  assert.equal(r.accountCommitted,true);assert.equal(r.localSyncPending,true);assert.equal(r.localSynced,false);assert.equal(f.remote().config.providers.p.label,'Published snapshot');
  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir,'workbuddy-3p.json'))).providers.p.label,'Concurrent edit');
  assert.equal(fs.existsSync(path.join(f.dir,'workbuddy-3p.scope.json')),false);

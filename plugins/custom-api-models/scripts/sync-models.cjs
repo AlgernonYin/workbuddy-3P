@@ -889,10 +889,9 @@ async function maintainRuntime() {
   });
 }
 
-const account = require("./account-profile.cjs").create({withLock,writeAtomic,cloudProfile,
-  hasLocalOverrides:dir=>configCandidates(dir).some(f=>fs.existsSync(f))||["switch","effort","context","parameters","scope"].some(k=>fs.existsSync(paths(dir)[k]))||Object.keys(ENV).some(k=>/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)&&!!ENV[k]&&!['WB3P_PROFILE','WB3P_CLOUD_SKILLS_DIR'].includes(k))});
+const account = require("./account-profile.cjs").create({withLock,writeAtomic,cloudProfile});
 let accountMeta={available:false,status:"not-connected"};
-function publishedBaseline(p){const c=account.cached(p);return c?.cloudUid&&c.connectionOnly!==true&&isObj(c.config)?{cfg:c.config,from:account.cachePath(p)}:null;}
+function publishedBaseline(p){const c=account.cached(p);return c?.cloudUid&&isObj(c.config)?{cfg:c.config,from:account.cachePath(p)}:null;}
 const settings = require("./settings.cjs")({ loadConfig, resolveSwitch, readEffort, readParameters, readContext, configCandidates, resolveKey, loadPreset, buildPlan, parseModels, readState,
   accountBaseline:publishedBaseline,
   officialModels:[...new Set([...(OFFICIAL.routable||[]),...(OFFICIAL.keepOfficial||[])])],

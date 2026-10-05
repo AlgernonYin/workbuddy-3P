@@ -83,7 +83,13 @@ async function callTool(name, args = {}) {
     }else{patch.effortDefault=action==="reset"?null:args.level;if(targetScope==="all")patch.efforts=Object.fromEntries([...new Set([...Object.keys(e.preferences.local.models||{}),...Object.keys(e.preferences.config.models||{})])].map(k=>[k,null]));}
     const result=await lib.applySettings({action:"apply",scope:saveScope,expectedRevision:s.revision,patch});
     if(!result.committed)return result;
-    return {...await lib.effortStatus(args.model?{model:args.model}:{}),...Object.fromEntries(Object.entries(result).filter(([k])=>!["models","providers","routes"].includes(k)))};
+    const receipt={...Object.fromEntries(Object.entries(result).filter(([k])=>!["models","providers","routes"].includes(k))),scope:result.scope||saveScope};
+    if(result.localSyncPending||result.partial||result.stateUnavailable)return receipt;
+    try{
+      return {...await lib.effortStatus({scope:saveScope,...(args.model?{model:args.model}:{})}),...receipt};
+    }catch{
+      return {...receipt,stateUnavailable:true,note:"Effort settings committed; state readback unavailable. Do not automatically retry; reopen status before further edits."};
+    }
   }
   if (name === "models_status") return { ...lib.status(), lastSync: clean(status) };
   if (name === "models_switch") {

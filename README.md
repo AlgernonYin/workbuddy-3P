@@ -44,6 +44,7 @@ A route is explicit: an official WorkBuddy slot points to `provider:model`, with
 2. In a WorkBuddy session, open `/models-settings` or ask to open the WorkBuddy 3P settings panel.
 3. For account defaults, call `models_settings` with `{ "action": "connect" }`. This returns the official WorkBuddy CLI/web login URL. Complete the login in your own account.
 4. Call `models_settings` with `{ "action": "finish-connect" }`. It verifies the account and the private profile. `accountConnected: true` and `accountCommitted: false` mean authorization succeeded; connecting does not switch the source or change routing.
+   An existing remote profile still appears in the account editor; the connection-only runtime state never hides or replaces the published editing baseline.
 5. Apply settings with the default `scope: "account"`. Use `scope: "session"` only as an explicit advanced override for the current sandbox.
 
 ## Account defaults and synchronization

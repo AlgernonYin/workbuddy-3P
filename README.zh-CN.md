@@ -44,6 +44,7 @@ WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件�
 2. 在 WorkBuddy 会话中打开 `/models-settings`，或让助手打开 WorkBuddy 3P 设置面板。
 3. 要保存账号默认值，调用 `models_settings` 的 `{ "action": "connect" }`。它会返回 WorkBuddy 官方 CLI/网页登录地址；请在自己的账号中完成登录。
 4. 调用 `models_settings` 的 `{ "action": "finish-connect" }`。它会验证账号和私有 profile。返回 `accountConnected: true`、`accountCommitted: false` 只表示授权成功；连接本身不切换来源，也不改变路由。
+   账号面板仍显示已经存在的远端配置；仅连接状态不会把已发布的编辑基线隐藏或当作空配置覆盖。
 5. 默认使用 `scope: "account"` 应用设置。只有明确需要当前沙箱高级覆盖时，才使用 `scope: "session"`。
 
 ## 账号默认值与同步

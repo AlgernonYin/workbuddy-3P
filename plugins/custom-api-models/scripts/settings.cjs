@@ -23,10 +23,8 @@ module.exports = function create(core) {
     const baseline = core.accountBaseline(p);
     if (baseline === null || baseline === undefined) return null;
     if (!object(baseline) || !object(baseline.cfg)) reject("invalid published account baseline");
-    if (baseline.connectionOnly === true) return null;
-    if (typeof baseline.from === "string" && fs.existsSync(baseline.from)) {
-      try { if (json(baseline.from)?.connectionOnly === true) return null; } catch {}
-    }
+    // connectionOnly controls runtime adoption, not account editing. A verified
+    // downloaded profile remains the baseline even before a source switch.
     return baseline;
   }
   function sourceKind(from) {
