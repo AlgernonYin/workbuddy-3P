@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 3.0.0 candidate, not published to `main`. Candidate evidence includes 237/237 local tests, selected official private-API/preflight checks, and one refresh/immediate-reuse check. A fresh-sandbox global acceptance run and human-run third-party acceptance have not been completed; no release acceptance or production result is claimed.
+**Version:** 3.0.0 candidate, not published to `main`. The reviewed runtime (`1f1a103`) passed 264/264 tests on Windows and a real Linux cloud sandbox. Official Native CLI requests verified independent route efforts and a real DeepSeek V4.1 request with `max`; private account saving, another sandbox receiving the change, exact restoration, and fresh-profile adoption after another sandbox's token refresh were verified separately. Automatic installation of the released 3.0 plugin, the actual cloud MCP Apps panel, a physical phone, and long-context pressure testing remain unverified. These checks do not guarantee indefinite refresh-token portability or a completed production rollout.
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets WorkBuddy use an OpenAI Chat Completions-compatible API that you control. Web and mobile clients share the cloud sandbox mechanism, so the documented flow does not require client or web-page changes; physical-phone acceptance remains unverified. Routed slots can still appear under their WorkBuddy names; opening the menu is not proof that live traffic is routed.
 
