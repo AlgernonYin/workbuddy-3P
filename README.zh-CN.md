@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-**版本：** 3.0.0 候选，尚未发布到 `main`。已审查的运行时代码（`1f1a103`）在 Windows 和真实 Linux 云沙箱通过 264/264 测试；官方 Native CLI 已验证独立路由档位，以及真实 DeepSeek V4.1 的 `max` 请求。账号私有保存、另一沙箱收到修改、原配置精确还原，以及另一沙箱刷新授权后新私有包采用，均已分别验证。正式 3.0 插件的自动安装、真实云端 MCP Apps 面板、手机真机和长上下文压力测试仍未验收；这些结果不保证 refresh token 永久可移植，也不代表已完成生产发布。
+**版本：** 3.0.0。已审查的运行时代码（`1f1a103`）在 Windows 和 Linux 通过 264/264 测试；官方 Native CLI 的真实 DeepSeek V4.1 `max` 请求成功，显式官方模式下旧第三方回环请求被 HTTP 410 拒绝。跨沙箱私有 global save/restore（`1.0.3`）和新 private asset 拉取均已验证。正式 3.0 插件的自动安装、云端 MCP Apps 面板、手机真机、长上下文行为和 refresh token 长期可移植性需独立验收；上述检查不保证已经完成部署。
 
 WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件市场。它让 WorkBuddy 使用你控制的 OpenAI Chat Completions 兼容 API。网页端和手机端共用云端沙箱机制，本说明中的流程不要求修改客户端或网页；手机真机尚未验收。路由后的槽位仍可能显示 WorkBuddy 模型名；能打开菜单并不证明实际流量已经走第三方。
 
@@ -34,7 +34,7 @@ WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件�
 }
 ```
 
-- 新配置使用显式路由，且不会自动生成任何路由。公开默认不选择个人供应商、厂商 preset 或最高档默认，也不提供最高 effort 默认值。
+- 新配置使用显式路由，且不会自动生成任何路由。公开默认不选择任何供应商、厂商 preset、最高档或同名路由偏好，也不提供最高 effort 默认值。
 - 旧 preset/推导模式和内置 preset 只作为旧配置的高级兼容路径；仅在旧配置明确写入时识别，不是公开默认或上手流程。
 - 每条路由的 effort 必须来自该模型声明的 `supportedEfforts`。路由级 effort 优先于该模型默认 effort。不要从 `onlyReasoning` 推断可调 effort；公开账号流程不提供“全部最高”批量操作。
 

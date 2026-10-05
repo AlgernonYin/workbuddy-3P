@@ -1,8 +1,8 @@
 {
   "name": "workbuddy-3p",
-  "description": "Candidate 3.0.0; not yet published. Use your own OpenAI Chat Completions-compatible APIs in cloud WorkBuddy / CodeBuddy Code",
+  "description": "OpenAI Chat Completions only; explicit routes; account defaults with explicit session overrides; per-route effort for cloud WorkBuddy / CodeBuddy Code",
   "owner": { "name": "AlgernonYin", "url": "https://github.com/AlgernonYin" },
   "plugins": [
-    { "name": "custom-api-models", "description": "Candidate 3.0.0; not yet published. Configure explicit Chat Completions routes, account defaults, session overrides, and per-route effort.", "version": "3.0.0", "source": "./plugins/custom-api-models" }
+    { "name": "custom-api-models", "description": "OpenAI Chat Completions only; explicit routes; account defaults with explicit session overrides; per-route effort.", "version": "3.0.0", "source": "./plugins/custom-api-models" }
   ]
 }

@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 3.0.0 candidate, not published to `main`. The reviewed runtime (`1f1a103`) passed 264/264 tests on Windows and a real Linux cloud sandbox. Official Native CLI requests verified independent route efforts and a real DeepSeek V4.1 request with `max`; private account saving, another sandbox receiving the change, exact restoration, and fresh-profile adoption after another sandbox's token refresh were verified separately. Automatic installation of the released 3.0 plugin, the actual cloud MCP Apps panel, a physical phone, and long-context pressure testing remain unverified. These checks do not guarantee indefinite refresh-token portability or a completed production rollout.
+**Version:** 3.0.0. The reviewed runtime (`1f1a103`) passed 264/264 tests on Windows and Linux. Official Native CLI verified a real DeepSeek V4.1 `max` request; explicit official mode rejected stale third-party loopback requests with HTTP 410. Cross-sandbox private global save/restore (`1.0.3`) and fresh private-asset retrieval were verified. Automatic installation of the released 3.0 plugin, the cloud MCP Apps panel, a physical phone, long-context behavior, and long-term refresh-token portability require separate acceptance; these checks do not guarantee a completed deployment.
 
 WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets WorkBuddy use an OpenAI Chat Completions-compatible API that you control. Web and mobile clients share the cloud sandbox mechanism, so the documented flow does not require client or web-page changes; physical-phone acceptance remains unverified. Routed slots can still appear under their WorkBuddy names; opening the menu is not proof that live traffic is routed.
 
@@ -34,7 +34,7 @@ A route is explicit: an official WorkBuddy slot points to `provider:model`, with
 }
 ```
 
-- New configurations use explicit routes and no routes are created automatically. No personal provider, vendor preset, or highest-tier default is selected by default. No highest-effort default is offered.
+- New configurations use explicit routes and no routes are created automatically. No provider, vendor preset, highest-tier, or same-name routing preference is selected by default. No highest-effort default is offered.
 - Legacy preset/inference modes and built-in presets are advanced compatibility paths for old configurations only. They are recognized only when an old configuration explicitly contains them; they are not the public default or onboarding flow.
 - Set effort per route from the model's declared `supportedEfforts`. A route-level effort wins over that model's default effort. Do not infer adjustable effort from `onlyReasoning`, and do not provide a highest-for-all bulk operation in the public account flow.
 
