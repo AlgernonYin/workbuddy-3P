@@ -115,10 +115,10 @@ test("stdio MCP exposes truthful disk status and switching/doctor behavior", t =
   const f = fixture(t);
   const calls = [
     { id: 1, method: "initialize", params: {} },
-    { id: 2, method: "tools/call", params: { name: "models_switch", arguments: { mode: "official" } } },
+    { id: 2, method: "tools/call", params: { name: "models_switch", arguments: { mode: "official",scope:"session" } } },
     { id: 3, method: "tools/call", params: { name: "models_doctor", arguments: {} } },
     { id: 4, method: "tools/call", params: { name: "models_status", arguments: {} } },
-    { id: 5, method: "tools/call", params: { name: "models_switch", arguments: { mode: "third-party" } } },
+    { id: 5, method: "tools/call", params: { name: "models_switch", arguments: { mode: "third-party",scope:"session" } } },
     { id: 6, method: "tools/call", params: { name: "models_status", arguments: {} } },
   ];
   const r = spawnSync(process.execPath, [path.join(path.dirname(script), "mcp-sync.cjs")], {
@@ -126,7 +126,7 @@ test("stdio MCP exposes truthful disk status and switching/doctor behavior", t =
   });
   assert.equal(r.status, 0, r.stderr); assert.ok(!r.stdout.includes("fake-only-canary"));
   const replies = r.stdout.trim().split("\n").map(JSON.parse);
-  assert.equal(replies[0].result.serverInfo.version, "2.5.1");
+  assert.equal(replies[0].result.serverInfo.version, "3.0.0");
   const result = id => JSON.parse(replies.find(r => r.id === id).result.content[0].text);
   assert.equal(result(2).active, false); assert.equal(result(3).skipped, true);
   assert.equal(result(2).requiresModelReselection, true); assert.match(result(2).note, /before|Before/);

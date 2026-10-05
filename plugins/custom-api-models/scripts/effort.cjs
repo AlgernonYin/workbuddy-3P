@@ -42,7 +42,7 @@ function capability(model, providerThinking = false) {
     object(map) && map.off !== null && map.off !== undefined;
   // Native host's same-name Kimi K3 / DeepSeek V4.1 paths currently omit the provider thinking
   // toggle, so removing reasoning fields would silently keep provider thinking ON.
-  const canDisableThinking = providerCanDisableThinking && (providerThinking || !["kimi-k3", "deepseek-v4.1-flash"].includes(model.id));
+  const canDisableThinking = providerCanDisableThinking && (providerThinking || !["kimi-k3", "deepseek-v4.1-flash"].includes(model.workbuddy3pBinding?.model||model.id));
   if (model.compat?.supportsReasoningEffort === false)
     return { supportedEfforts: [], canDisableThinking, providerCanDisableThinking, reason: "provider protocol declares effort unsupported; thinking toggle may still be supported" };
   const declared = model.reasoning?.supportedEfforts;
@@ -65,15 +65,16 @@ function applyEfforts(models, owner, local, config = {}, providerThinking = fals
   validatePreferences(local, true); validatePreferences(config);
   const info = [];
   for (const model of models) {
-    const target = `${owner.get(model.id)}:${model.id}`;
+    const target = `${owner.get(model.id)}:${model.workbuddy3pBinding?.model || model.id}`;
     const base = model.reasoning?.defaultEffort ?? model.reasoning?.effort ?? null;
-    const cap = capability(model, providerThinking), pref = preference(target, local, config, base);
-    const adjustable = pref.source !== "model";
+    const cap = capability(model, providerThinking), pref = model.workbuddy3pBinding?.routeEffort
+      ? {level:typeof model.workbuddy3pBinding.routeEffort==="string"?model.workbuddy3pBinding.routeEffort:base,source:"route",specific:true} : preference(target, local, config, base);
+    const adjustable = pref.source !== "model" || ["on","off"].includes(pref.level);
     const accepted = adjustable && (cap.supportedEfforts.includes(pref.level) || ["off", "on"].includes(pref.level) && cap.canDisableThinking);
     if (adjustable && !accepted && pref.specific)
       error(`model ${target} does not support requested effort; supported: ${cap.supportedEfforts.join(", ") || "none"}`);
     if (accepted) {
-      const native = pref.level === "on" ? cap.supportedEfforts.at(-1) || (base !== "off" && base) || "high" : pref.level;
+      const native = pref.level === "on" ? (cap.supportedEfforts.includes(base) ? base : cap.supportedEfforts[0] || (LEVELS.includes(base) && base) || "high") : pref.level;
       model.reasoning = { ...model.reasoning, defaultEffort: native, effort: native };
       // The host's default-effort normalizer does not accept "off". Disabling
       // this custom entry's reasoning capability is the supported per-model seam.

@@ -12,7 +12,7 @@ function validate(value) {
 function apply(models, owner, local) {
   validate(local);
   return models.map(m => {
-    const target = `${owner.get(m.id)}:${m.id}`, base = Number.isSafeInteger(m.contextWindow) && m.contextWindow > 0
+    const target = `${owner.get(m.id)}:${m.workbuddy3pBinding?.model || m.id}`, base = Number.isSafeInteger(m.contextWindow) && m.contextWindow > 0
       ? Math.min(m.maxInputTokens, m.contextWindow) : m.maxInputTokens, value = local.models?.[target];
     if (value !== undefined) {
       if (!Number.isSafeInteger(base) || value > base) throw Error(`context limit exceeds declared input capacity for ${target}`);

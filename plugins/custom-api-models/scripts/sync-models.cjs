@@ -14,6 +14,8 @@ const effort = require("./effort.cjs");
 const context = require("./context.cjs");
 const parameters = require("./parameters.cjs");
 const runtime = require("./parameter-runtime.cjs");
+const providerApi = require("./provider-discovery.cjs");
+const imported = require("./provider-models.cjs");
 
 class ConfigError extends Error {}
 const fail = (msg) => { throw new ConfigError(msg); };
@@ -30,6 +32,7 @@ const paths = (dir = configDir()) => ({
   context: path.join(dir, "workbuddy-3p.context.json"),
   parameters: path.join(dir, "workbuddy-3p.parameters.json"),
   runtime: path.join(dir, "workbuddy-3p.runtime.json"),
+  scope: path.join(dir, "workbuddy-3p.scope.json"),
 });
 
 // Missing file -> null. Existing but unreadable/invalid -> error (never silently ignored).
@@ -42,14 +45,18 @@ const readJsonLoose = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8"
 const readText = (p) => { try { return fs.readFileSync(p, "utf8").trim(); } catch { return ""; } };
 function writeAtomic(p, text, expected) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp-${process.pid}-${Date.now()}`;
+  const tmp = `${p}.tmp-${process.pid}-${require("crypto").randomBytes(8).toString("hex")}`;
   try {
-    fs.writeFileSync(tmp, text, { mode: 0o600 });
+    fs.writeFileSync(tmp, text, { mode: 0o600, flag:"wx" });
+    const fd=fs.openSync(tmp,"r+");try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
     if (expected !== undefined) {
       const current = fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
       if (current !== expected) fail("settings target changed before atomic replace");
     }
     fs.renameSync(tmp, p);
+    if(process.platform!=="win32"){
+      const dir=fs.openSync(path.dirname(p),"r");try{fs.fsyncSync(dir);}catch(e){if(!["EINVAL","ENOTSUP","EOPNOTSUPP"].includes(e.code))throw e;}finally{fs.closeSync(dir);}
+    }
   } finally { try { fs.unlinkSync(tmp); } catch {} }
   try { fs.chmodSync(p, 0o600); } catch {}
 }
@@ -93,7 +100,8 @@ function parseSwitch(v, where) {
 }
 // Precedence: switch file (set by MCP tool / CLI, per sandbox) > env/plugin option > config.enabled > on.
 function resolveSwitch(dir, cfg, ignoreLocal = false) {
-  const f = ignoreLocal ? null : parseSwitch(readText(paths(dir).switch), "workbuddy-3p.switch");
+  if(!ignoreLocal && usesAccount(dir))return {mode:parseSwitch((cfg||require("./account-profile.cjs").cached({dir})?.config)?.enabled,"account config")||"third-party",from:"account"};
+  const f = ignoreLocal || usesAccount(dir) ? null : parseSwitch(readText(paths(dir).switch), "workbuddy-3p.switch");
   if (f) return { mode: f, from: "switch file" };
   const e = parseSwitch(ENV.WB3P_ENABLED, "WB3P_ENABLED") || parseSwitch(opt("ENABLED"), "plugin option ENABLED");
   if (e) return { mode: e, from: ENV.WB3P_ENABLED ? "WB3P_ENABLED" : "plugin option ENABLED" };
@@ -104,6 +112,7 @@ async function setSwitch(mode) {
   const m = parseSwitch(mode, "switch");
   const p = paths();
   return withLock(p.dir, async () => {
+    if(usesAccount(p.dir))fail("Account defaults active; use models_settings apply (account), or explicitly choose scope=session in the panel.");
     const previous = fs.existsSync(p.switch) ? fs.readFileSync(p.switch, "utf8") : null;
     try {
       if (!m) fs.rmSync(p.switch, { force: true }); else writeAtomic(p.switch, m + "\n");
@@ -150,6 +159,10 @@ function cloudProfile(dir) {
   return { cfg: profile.config, from: found[0] };
 }
 function loadConfig(dir) {
+  const global = require("./account-profile.cjs").cached({dir});
+  const scope = readJsonStrict(path.join(dir,"workbuddy-3p.scope.json"),"settings scope");
+  if(scope && (!isObj(scope)||scope.version!==1||!["session","account"].includes(scope.scope)))fail("invalid settings scope");
+  if(global && (scope?.scope==="account" || !scope && global.connectionOnly!==true))return {cfg:global.config,from:require("./account-profile.cjs").cachePath({dir})};
   if (ENV.WB3P_CONFIG_JSON) {
     try { return { cfg: JSON.parse(ENV.WB3P_CONFIG_JSON), from: "$WB3P_CONFIG_JSON" }; }
     catch { fail("WB3P_CONFIG_JSON is not valid JSON"); }
@@ -175,15 +188,17 @@ function loadConfig(dir) {
 
 function validateConfig(cfg) {
   if (!isObj(cfg)) fail("config must be a JSON object");
-  if (!isObj(cfg.providers) || !Object.keys(cfg.providers).length) fail("config.providers must be a non-empty object");
+  if (!isObj(cfg.providers)) fail("config.providers must be an object");
   for (const [n, p] of Object.entries(cfg.providers)) {
     if (!isObj(p)) fail(`provider ${n} must be an object`);
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(n)) fail("provider names must use letters, digits, dots, underscores or hyphens");
-    for (const k of ["baseUrl", "label", "preset", "apiKey", "apiKeyEnv", "apiKeyFile", "apiKeyUrl"])
+    for (const k of ["baseUrl", "label", "preset", "protocol", "anthropicVersion", "apiKey", "apiKeyEnv", "apiKeyFile", "apiKeyUrl"])
       if (p[k] !== undefined && typeof p[k] !== "string") fail(`provider ${n}.${k} must be a string`);
+    providerApi.normalizeProtocol(p.protocol || "openai-chat");
     if (p.extraModels !== undefined && !(Array.isArray(p.extraModels) && p.extraModels.every(x => typeof x === "string" && x.trim())))
       fail(`provider ${n}.extraModels must be an array of non-empty strings`);
     for (const k of ["models", "defaults"]) if (p[k] !== undefined && !isObj(p[k])) fail(`provider ${n}.${k} must be an object`);
+    if (p.models !== undefined) imported.validateModels(p.models);
   }
   if (cfg.default !== undefined && !cfg.providers[cfg.default]) fail(`default provider ${cfg.default} is not configured`);
   if (cfg.mode !== undefined && !MODES.includes(cfg.mode)) fail(`mode must be one of ${MODES.join(", ")}`);
@@ -204,7 +219,15 @@ function loadPreset(name) {
 const OFFICIAL = readJsonLoose(path.join(PRESETS, "workbuddy-official.json")) || { keepOfficial: [], routable: [] };
 
 // ---------- persistent model-default effort (no credentials) ----------
+function usesAccount(dir){const c=require("./account-profile.cjs").cached({dir}),s=readJsonStrict(paths(dir).scope,"settings scope");return !!c&&(s?.scope==="account"||!s&&c.connectionOnly!==true);}
+function readParameters(p){
+  if(usesAccount(p.dir))return {version:1,priority:account.cached(p)?.config?.parameterPriority||"3p"};
+  let cfg;try{cfg=loadConfig(p.dir).cfg;}catch{cfg={};}
+  return parameters.read(p,cfg||{});
+}
+function readContext(p){return context.validate(usesAccount(p.dir)?account.cached(p)?.config?.context||{version:1}:readJsonStrict(p.context,"local context preferences")||{version:1});}
 function readEffort(p) {
+  if(usesAccount(p.dir))return {version:1};
   const value = readJsonStrict(p.effort, "local effort preferences");
   if (value === null && !fs.existsSync(p.effort)) return { version: 1 };
   return effort.validatePreferences(value, true);
@@ -229,7 +252,7 @@ function effortReport(plan, cfg, local, sw, current, state, selector) {
     orphanedTargets: plan.effort.orphanedTargets,
     profileConfigPatch: { effort: { ...(profileDefault !== undefined ? { default: profileDefault } : {}),
       ...(Object.keys(profileModels).length ? { models: profileModels } : {}) } },
-    parameterPriority: parameters.read(paths()).priority,
+    parameterPriority: readParameters(paths()).priority,
     note: "Third-party preferences, not runtime proof. In 3p priority the plugin-host adapter enforces declared thinking parameters; in native priority session/user overrides win. Local changes do not synchronize other sandboxes." };
 }
 
@@ -271,6 +294,7 @@ async function setEffort(args = {}) {
   if (action === "set" && !["off", "on", ...effort.LEVELS].includes(args.level)) fail("invalid effort level; use on, off, minimal, low, medium, high, xhigh or max");
   const p = paths();
   return withLock(p.dir, async () => {
+    if(usesAccount(p.dir))fail("Account defaults active; use models_settings apply (account), or explicitly choose scope=session in the panel.");
     const previous = fs.existsSync(p.effort) ? fs.readFileSync(p.effort, "utf8") : null;
     const local = action === "reset" && scope === "all" ? { version: 1 } : clone(readEffort(p));
     const current = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null);
@@ -376,7 +400,8 @@ function parseTarget(t, cfg, officialId, warnings) {
     if (t.model !== undefined && (typeof t.model !== "string" || !t.model.trim())) fail(`route ${officialId}: model must be a non-empty string`);
     const provider = t.provider || cfg.default;
     if (!cfg.providers[provider]) fail(`route ${officialId}: unknown provider ${provider}`);
-    return { provider, model: t.model || officialId };
+    const r = imported.route({ provider, model: t.model || officialId, ...(t.effort !== undefined ? { effort: t.effort } : {}) }, cfg.providers);
+    return { ...r, independent: true };
   }
   if (typeof t !== "string") fail(`route ${officialId}: invalid target`);
   const i = t.indexOf(":");
@@ -401,13 +426,16 @@ async function buildPlan(cfg, dir, prev, opts = {}) {
     const p = cfg.providers[n], preset = loadPreset(p.preset);
     const baseUrl = p.baseUrl || preset?.baseUrl;
     if (!baseUrl) fail(`provider ${n}: baseUrl missing`);
-    const url = chatUrl(baseUrl, n, p.allowInsecureHttp === true);
+    const protocol = providerApi.normalizeProtocol(p.protocol || "openai-chat");
+    // Protocol selects discovery/probe semantics; never translate a host payload.
+    const url = protocol === "openai-chat" ? chatUrl(baseUrl, n, p.allowInsecureHttp === true)
+      : providerApi.endpoint({ ...p, baseUrl, protocol }, "generation");
     const prevKey = prev.providers?.[n]?.url === url ? prev.keys[n] || "" : "";
-    P[n] = { ...p, name: n, preset, url, label: p.label || preset?.label || n,
+    P[n] = { ...p, name: n, preset, protocol, url, label: p.label || preset?.label || n,
       ...(opts.metadataOnly ? { key: "", source: "not resolved" } : await resolveKey(n, p, n === cfg.default, dir, prevKey)) };
   }
 
-  const mode = cfg.mode || "same-name";
+  const mode = cfg.mode || "explicit";
   const dp = P[cfg.default];
   const keepOfficial = new Set(cfg.keepOfficial || []);
   const routes = {};
@@ -423,30 +451,42 @@ async function buildPlan(cfg, dir, prev, opts = {}) {
     if (r) routes[id] = r; else delete routes[id];
   }
 
-  // One custom model per upstream model id; an id can belong to exactly one provider.
+  // Legacy string routes keep their IDs; structured routes have independent bindings.
   const entries = new Map(), routed = {}, owner = new Map(), extra = [];
-  const add = (provider, model, alias) => {
+  const add = (provider, model, alias, binding = {}) => {
     const p = P[provider];
+    if (p.protocol !== "openai-chat") {
+      if (alias) fail("This WorkBuddy custom-model host sends Chat Completions only; use the backend's compatible chat endpoint for session routing. The plugin does not convert protocols.");
+      return false; // Imported Responses/Messages models remain provider inventory.
+    }
     if (!p.key && !opts.metadataOnly) { warnings.push(`provider ${provider}: no API key; ${alias || model} not added`); return false; }
-    const own = owner.get(model);
-    if (own && own !== provider) { warnings.push(`model id ${model} already belongs to provider ${own}; ${alias || model} via ${provider} skipped`); return false; }
-    let e = entries.get(model);
+    const independent = binding.independent === true || owner.has(model) && owner.get(model) !== provider;
+    const id = independent ? "wb3p-" + require("crypto").createHash("sha256").update(JSON.stringify([provider,model,alias||null])).digest("hex").slice(0,24) : model;
+    let e = entries.get(id);
     if (!e) {
       const pm = effort.mergeModel(p.preset?.models?.[model], p.models?.[model], cfg.models?.[`${provider}:${model}`]);
-      const tpl = clone(p.preset?.templates?.[pm.template] || p.defaults || cfg.defaults ||
-        { maxInputTokens: 128000, maxOutputTokens: 32768, supportsToolCall: true, supportsImages: false, supportsReasoning: false });
+      const tpl = clone(p.preset?.templates?.[pm.template] || p.defaults || cfg.defaults || {});
       delete pm.template;
-      e = { ...effort.mergeModel(tpl, pm), id: model, name: `${p.label} / ${model}`, url: p.url, apiKey: p.key, aliases: [] };
-      entries.set(model, e); owner.set(model, provider);
+      e = { ...effort.mergeModel(tpl, pm), id, name: `${p.label} / ${model}${independent && alias ? " / " + alias : ""}`, url: p.url, apiKey: p.key, aliases: [],
+        ...(independent ? { workbuddy3pBinding: { provider, model, ...(alias ? { alias } : {}), ...(binding.effort ? {routeEffort:binding.effort}: {}) } } : {}) };
+      if (binding.effort !== undefined && binding.effort !== null) {
+        const declared = e.reasoning?.supportedEfforts || [];
+        if (!declared.includes(binding.effort) && !(["off","on"].includes(binding.effort) && e.reasoning?.canDisableThinking === true && e.onlyReasoning !== true))
+          fail("route effort is not supported by its imported model");
+        // Preserve the imported default; the independent binding carries this
+        // route's choice separately, including a thinking-only on/off toggle.
+        // applyEfforts validates the original capability before projecting off.
+      }
+      entries.set(id, e); owner.set(id, provider);
     }
-    if (alias) { routed[alias] = { provider, model, label: `${p.label} / ${model}` }; if (alias !== model && !e.aliases.includes(alias)) e.aliases.push(alias); }
+    if (alias) { routed[alias] = { provider, model, id, label: `${p.label} / ${model}`, ...(binding.effort ? { effort: binding.effort } : {}) }; if (alias !== id && !e.aliases.includes(alias)) e.aliases.push(alias); }
     return true;
   };
-  for (const [id, r] of Object.entries(routes)) add(r.provider, r.model, id);
+  for (const [id, r] of Object.entries(routes)) add(r.provider, r.model, id, r);
   for (const n of names) {
     const ids = [...(P[n].extraModels || []), ...(n === cfg.default && mode !== "explicit" ? Object.keys(dp.preset?.models || {}) : [])];
     for (const m of ids) {
-      if (entries.has(m)) { if (owner.get(m) !== n) warnings.push(`model id ${m} already belongs to provider ${owner.get(m)}; extra model via ${n} skipped`); continue; }
+      if (entries.has(m) && owner.get(m) === n) continue;
       if (add(n, m, null)) extra.push(m);
     }
   }
@@ -456,8 +496,8 @@ async function buildPlan(cfg, dir, prev, opts = {}) {
   const models = [...entries.values()];
   const local = opts.preferences ?? readEffort(paths(dir));
   const appliedEffort = effort.applyEfforts(models, owner, local, cfg.effort || {},
-    (opts.parameterPriority ?? parameters.read(paths(dir)).priority) === "3p");
-  const inputLimits = context.apply(models, owner, opts.contextPreferences ?? readJsonStrict(paths(dir).context, "local context preferences") ?? { version: 1 });
+    (opts.parameterPriority ?? readParameters(paths(dir)).priority) === "3p");
+  const inputLimits = context.apply(models, owner, opts.contextPreferences ?? (usesAccount(dir)?cfg.context:readJsonStrict(paths(dir).context, "local context preferences")) ?? cfg.context ?? { version: 1 });
   return { models, owner, routed, extra, keep, hideOfficial: [...hideOfficial], warnings, providers: P, mode, effort: appliedEffort, contexts: inputLimits };
 }
 
@@ -656,14 +696,14 @@ async function syncUnlocked(opts, p) {
       ...(restored.officialCatalogConflicts?.length ? { officialCatalogConflicts: restored.officialCatalogConflicts } : {}) };
   }
 
-  const params = parameters.read(p);
+  const params = readParameters(p);
   if (opts.preparedPlan && opts.preparedFingerprint !== fingerprint(cfg, sw.mode, readEffort(p), readJsonStrict(p.context, "local context preferences") || { version: 1 }, params))
     fail("configuration changed before routing commit; prepared plan rejected");
   const plan = opts.preparedPlan || await buildPlan(clone(cfg), p.dir, prevKeys(cur, state));
   const summary = { ok: plan.warnings.length === 0, partial: plan.warnings.length > 0 && plan.models.length > 0, ...base, active: plan.models.length > 0, ...publicSummary(plan) };
   if (opts.dryRun) return { ...summary, plan };
 
-  const adapter = params.priority === "3p" && plan.models.length ? await runtime.ensure(p, writeAtomic) : null;
+  const adapter = plan.models.length && (params.priority === "3p" || plan.models.some(m => m.workbuddy3pBinding)) ? await runtime.ensure(p, writeAtomic) : null;
   const projected = plan.models.map(m => adapter ? { ...m, ...runtime.projection(adapter, m.id) } : m);
   summary.parameterPriority = params.priority;
   summary.parameterAdapter = adapter ? "plugin-host-loopback" : "disabled";
@@ -700,6 +740,7 @@ async function syncUnlocked(opts, p) {
 
 async function sync(opts = {}) {
   const p = paths();
+  if(!opts.skipAccountPull)await account.pull(p);
   try {
     const r = await (opts.dryRun ? syncUnlocked(opts, p) : withLock(p.dir, () => syncUnlocked(opts, p)));
     if (!opts.dryRun) fs.rmSync(p.lastError, { force: true });
@@ -730,7 +771,7 @@ function status() {
     sw = resolveSwitch(p.dir, null);
     state = readState(p); current = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null);
     checkOwnership(current, state);
-    priority = parameters.read(p).priority;
+    priority = readParameters(p).priority;
     active = (current.models || []).some(m => state.managed.includes(m.id));
     managedModels = (current.models || []).filter(m => state.managed.includes(m.id)).length;
     if (sw.mode !== "official") { ({ cfg, from } = loadConfig(p.dir)); if (from !== "none") validateConfig(cfg); sw = resolveSwitch(p.dir, cfg); }
@@ -790,8 +831,9 @@ async function proxyRouteSnapshot(id, serverId) {
     if (!m || m.url !== binding.url || m.apiKey !== binding.apiKey) return null;
     const provider = Object.values(state.providers).find(v => v.modelIds.includes(id));
     if (!provider?.apiKey) return null;
-    const priority = parameters.read(p).priority;
-    return { model: { ...m, url: provider.url, apiKey: provider.apiKey }, url: provider.url, apiKey: provider.apiKey, priority };
+    const priority = readParameters(p).priority;
+    return { model: { ...m, url: provider.url, apiKey: provider.apiKey }, url: provider.url, apiKey: provider.apiKey, priority,
+      ...(m.workbuddy3pBinding ? { upstreamModel: m.workbuddy3pBinding.model } : {}) };
   });
 }
 async function retireProxyRuntime(serverId) {
@@ -806,22 +848,77 @@ async function retireProxyRuntime(serverId) {
 async function runtimeHeartbeat() { try { return await runtime.heartbeat(paths()); } catch { return false; } }
 async function maintainRuntime() {
   const p = paths();
+  const priorRevision=account.cached(p)?.accountRevision||account.cached(p)?.cloudVersion;
+  accountMeta=await account.pull(p);
   return withLock(p.dir, async () => {
+    if(usesAccount(p.dir)&&(account.cached(p)?.accountRevision||account.cached(p)?.cloudVersion)!==priorRevision)return syncUnlocked({},p);
     const mode = runtimeMode(p);
     if (mode === "unavailable") return;
     const state = readState(p);
+    const cur = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models,"utf8") : null);
     if (!state.managed.length) return;
     if (mode === "official") return syncUnlocked({}, p);
-    if (parameters.read(p).priority !== "3p") return;
+    if (readParameters(p).priority !== "3p" && !state.managed.some(id=>cur.models?.find(m=>m.id===id)?.workbuddy3pBinding)) return;
     if (!await runtime.heartbeat(p)) return syncUnlocked({}, p);
   });
 }
 
-const settings = require("./settings.cjs")({ loadConfig, resolveSwitch, readEffort, readParameters: parameters.read, buildPlan, parseModels, readState,
+const account = require("./account-profile.cjs").create({withLock,writeAtomic,cloudProfile,
+  hasLocalOverrides:dir=>configCandidates(dir).some(f=>fs.existsSync(f))||["switch","effort","context","parameters","scope"].some(k=>fs.existsSync(paths(dir)[k]))||Object.keys(ENV).some(k=>/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)&&!!ENV[k]&&!['WB3P_PROFILE','WB3P_CLOUD_SKILLS_DIR'].includes(k))});
+let accountMeta={available:false,status:"not-connected"};
+const settings = require("./settings.cjs")({ loadConfig, resolveSwitch, readEffort, readParameters, readContext, configCandidates, resolveKey, loadPreset, buildPlan, parseModels, readState,
+  officialModels:[...new Set([...(OFFICIAL.routable||[]),...(OFFICIAL.keepOfficial||[])])],
+  accountMeta:()=>accountMeta,
   checkOwnership, prevKeys, writeAtomic, writeAtomicChecked: writeAtomic, syncUnlocked, fingerprint, presetFingerprint });
-async function settingsStatus() { const p = paths(); return withLock(p.dir, () => settings.viewUnlocked(p)); }
-async function applySettings(args) { const p = paths(); return withLock(p.dir, () => settings.applyUnlocked(p, args)); }
-module.exports = { sync, uninstall, doctor, status, setSwitch, effortStatus, setEffort, settingsStatus, applySettings, ConfigError,
+async function providerRequest(args = {}) {
+  if (!isObj(args) || Object.keys(args).some(k => !["action", "providerId", "model", "allowBillable"].includes(k)) ||
+      !["discover", "probe"].includes(args.action) || !imported.safeId(args.providerId)) fail("invalid provider operation");
+  if (args.action === "probe" && (args.allowBillable !== true || !imported.safeId(args.model)))
+    fail("a model probe requires an explicit model and allowBillable=true");
+  if (args.action === "discover" && (args.model !== undefined || args.allowBillable !== undefined)) fail("invalid discovery arguments");
+  const p = paths();
+  const current = await withLock(p.dir, async () => {
+    const { cfg } = loadConfig(p.dir); validateConfig(cfg);
+    const provider = cfg.providers[args.providerId];
+    if (!provider) fail("unknown saved provider; save it before model discovery");
+    const preset = loadPreset(provider.preset);
+    const source = { ...provider, baseUrl: provider.baseUrl || preset?.baseUrl };
+    const { key } = await resolveKey(args.providerId, source, cfg.default === args.providerId || !cfg.default && Object.keys(cfg.providers)[0] === args.providerId, p.dir, "");
+    if (!key) fail("configure the provider credential in a private file or environment first");
+    return { provider: source, key };
+  });
+  try {
+    const result = args.action === "discover" ? await providerApi.discoverModels({ ...current, fetch })
+      : await providerApi.probeModel({ ...current, model: args.model, fetch });
+    return { ok: args.action === "discover" ? true : result.ok, providerId: args.providerId,
+      protocol: providerApi.normalizeProtocol(current.provider.protocol || "openai-chat"), ...result,
+      ...(args.action === "probe" ? { model: args.model, note: "Native endpoint probe only; host protocol support and routed session traffic require separate verification." } : {}) };
+  } catch (e) { return { ok: false, providerId: args.providerId, error: { code: e instanceof providerApi.ProviderDiscoveryError ? e.code : "REQUEST_FAILED", status: e instanceof providerApi.ProviderDiscoveryError ? e.status : null } }; }
+}
+async function settingsStatus() { const p = paths(); accountMeta=await account.pull(p); return withLock(p.dir, () => settings.viewUnlocked(p)); }
+async function applySettings(args) {
+  const p=paths(),scope=args?.scope||"account";
+  if(scope==="session")return withLock(p.dir,()=>settings.applyUnlocked(p,args));
+  if(scope!=="account")fail("invalid settings scope");
+  return account.transaction(p,async tx=>{
+    accountMeta=await tx.pull({strict:true});
+    if(accountMeta.retryBlocked)return accountMeta;
+    if(!accountMeta.available)fail("Authorize account sync before saving account defaults; no session fallback was applied.");
+    const prepared=await withLock(p.dir,()=>settings.prepareAccount(p,args));
+    const result=await tx.publish(prepared.cfg,prepared.accountRevision,{confirmedConfirmationTypes:args.confirmedConfirmationTypes||[]});
+    if(result.accountCommitted!==true)return result;
+    const committed={...result,ok:true,committed:true,scope:"account"};
+    let synced;
+    try{synced=await withLock(p.dir,()=>settings.adoptAccount(p,prepared));}
+    catch{return {...committed,localSyncPending:true,localSynced:false,note:"Account defaults saved. This sandbox needs resync; do not publish again."};}
+    if(synced.ok!==true||synced.partial)return {...committed,localSyncPending:true,localSynced:false,partial:true,warnings:synced.warnings||[],note:"Account defaults saved, but local routing is incomplete. Fix credentials/routes and resync; do not republish."};
+    accountMeta=await tx.pull();
+    let view;try{view=await withLock(p.dir,()=>settings.viewUnlocked(p));}catch{return {...committed,stateUnavailable:true,localSynced:true,note:"Account defaults saved; state readback unavailable. Do not publish again."};}
+    return {...view,...committed,localSynced:true,requiresHostRefresh:true,requiresModelReselection:true};
+  });
+}
+async function accountLogin(action){const p=paths();if(action==="connect")return account.begin(p);if(action==="finish-connect")return account.finish(p);fail("invalid account login operation");}
+module.exports = { sync, uninstall, doctor, status, setSwitch, effortStatus, setEffort, settingsStatus, applySettings, accountLogin, providerRequest, ConfigError,
   proxyRouteSnapshot, retireProxyRuntime, runtimeHeartbeat, maintainRuntime, runtimePaths: paths, runtimeWrite: writeAtomic, runtimeLock: withLock };
 
 if (require.main === module) {

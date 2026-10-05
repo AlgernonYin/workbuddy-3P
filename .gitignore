@@ -15,3 +15,9 @@ workbuddy-3p-settings.html
 workbuddy-3p.parameters.json
 workbuddy-3p.runtime.json
 workbuddy-3p.state.json
+workbuddy-3p.account-cache.json
+workbuddy-3p.account-login.json
+workbuddy-3p.scope.json
+workbuddy-3p.account-connection.json
+workbuddy-3p.account-attempt.json
+.workbuddy-3p-account/

@@ -37,7 +37,7 @@ version: 1.0.0
 
 Use the custom-api-models MCP tools models_status and models_switch for model routing.
 Use models_effort to inspect or change third-party model-default reasoning effort.
-Local effort changes do not automatically synchronize this account profile.
+Changes default to account scope after you authorize account sync. Explicit session overrides remain local.
 The adjacent workbuddy-3p.profile.json is private runtime data consumed by the plugin.
 Do not open, quote, upload, or print that file in a conversation. It may contain credentials.
 This skill does not run shell commands or modify the browser.

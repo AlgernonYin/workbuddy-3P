@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
-  <title>WorkBuddy 公众模型配置</title>
+  <title>WorkBuddy 3P 模型管理</title>
   <style>
     :root {
       --wb-green-900: #064e3b;
@@ -39,9 +39,9 @@
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
     }
-    button, input, select, textarea { font: inherit; }
+    button, input, select { font: inherit; }
     button { touch-action: manipulation; }
-    .shell { width: min(100%, 980px); max-width: 100%; min-width: 0; margin: 0 auto; padding: 0 16px calc(112px + env(safe-area-inset-bottom)); }
+    .shell { width: min(100%, 1080px); max-width: 100%; min-width: 0; margin: 0 auto; padding: 0 16px calc(116px + env(safe-area-inset-bottom)); }
     .hero { padding: 28px 2px 18px; }
     .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
     .brand-mark {
@@ -51,7 +51,7 @@
     }
     .eyebrow { margin: 0 0 2px; color: var(--wb-green-700); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
     h1 { margin: 0; font-size: clamp(25px, 6vw, 38px); line-height: 1.12; letter-spacing: -0.035em; }
-    .hero-copy { max-width: 720px; margin: 10px 0 0; color: var(--wb-muted); }
+    .hero-copy { max-width: 760px; margin: 10px 0 0; color: var(--wb-muted); }
     .connection {
       display: flex; align-items: flex-start; gap: 12px; margin: 0 0 18px; padding: 14px 16px;
       border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.9);
@@ -63,33 +63,33 @@
     .connection.is-offline .connection-dot { background: #64748b; box-shadow: 0 0 0 4px rgba(100, 116, 139, 0.14); }
     .connection.is-error .connection-dot { background: #dc2626; box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.14); }
     .connection strong { display: block; margin-bottom: 2px; }
-    .connection p { margin: 0; color: var(--wb-muted); }
+    .connection p { margin: 0; color: var(--wb-muted); overflow-wrap: anywhere; }
     .card { min-width: 0; margin: 0 0 16px; padding: 18px; border: 1px solid var(--wb-line); border-radius: var(--radius-lg); background: var(--wb-card); box-shadow: var(--wb-shadow); }
     .waiting { padding: 42px 22px; text-align: center; }
     .waiting-symbol { display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 18px; color: var(--wb-green-700); background: var(--wb-green-50); font-size: 24px; animation: breathe 1.8s ease-in-out infinite; }
     @keyframes breathe { 0%, 100% { opacity: 0.72; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1); } }
     @media (prefers-reduced-motion: reduce) { .waiting-symbol { animation: none; } }
     .waiting h2 { margin: 0 0 6px; font-size: 20px; }
-    .waiting p { max-width: 560px; margin: 0 auto; color: var(--wb-muted); }
+    .waiting p { max-width: 620px; margin: 0 auto; color: var(--wb-muted); }
     .section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
     .section-head h2 { margin: 0; font-size: 18px; letter-spacing: -0.015em; }
     .section-head p { margin: 4px 0 0; color: var(--wb-muted); font-size: 13px; }
-    .mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .mode-option { position: relative; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 12px 14px; border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: #fbfdfc; cursor: pointer; transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease; }
-    .mode-option:has(input:checked) { border-color: var(--wb-green-500); background: var(--wb-green-50); box-shadow: inset 0 0 0 1px var(--wb-green-500); }
-    .mode-option input { width: 18px; height: 18px; accent-color: var(--wb-green-600); }
-    .mode-option span { font-weight: 650; }
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 14px; }
-    .summary-item { min-width: 0; padding: 11px 12px; border-radius: var(--radius-sm); background: #f6faf8; }
-    .summary-item dt { color: var(--wb-muted); font-size: 12px; }
-    .summary-item dd { margin: 2px 0 0; overflow-wrap: anywhere; font-weight: 650; }
-    .warning-list { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
-    .warning-list li { padding: 10px 12px; border: 1px solid var(--wb-warn-line); border-radius: var(--radius-sm); background: var(--wb-warn-bg); color: #754b00; font-size: 13px; }
-    .state-note { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--wb-green-500); background: var(--wb-green-50); color: #155e45; overflow-wrap: anywhere; }
+    .scope-options { display: grid; gap: 10px; }
+    .choice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 13px; border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: #fbfdfc; cursor: pointer; }
+    .choice:has(input:checked) { border-color: var(--wb-green-500); background: var(--wb-green-50); box-shadow: inset 0 0 0 1px var(--wb-green-500); }
+    .choice input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--wb-green-600); }
+    .choice strong { display: block; }
+    .choice small { display: block; color: var(--wb-muted); margin-top: 2px; }
+    details.advanced { margin-top: 10px; padding: 10px 12px; border: 1px dashed #c8d9d2; border-radius: var(--radius-sm); background: #fbfdfc; }
+    details.advanced summary { cursor: pointer; font-weight: 700; }
+    .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 14px; padding: 5px; border: 1px solid var(--wb-line); border-radius: 16px; background: #eaf4ef; }
+    .tab { min-height: 44px; border: 0; border-radius: 12px; color: #315e4d; background: transparent; font-weight: 750; cursor: pointer; }
+    .tab[aria-selected="true"] { color: var(--wb-green-900); background: #fff; box-shadow: 0 5px 14px rgba(16, 35, 28, 0.08); }
+    .tab:focus-visible, .button:focus-visible { outline: 2px solid var(--wb-green-500); outline-offset: 2px; }
     .list { display: grid; gap: 12px; }
-    .model-card, .provider-card, .route-card { min-width: 0; border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: #fcfefd; overflow: hidden; }
-    .model-card > header, .provider-card > header, .route-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 13px 14px; border-bottom: 1px solid var(--wb-line); background: #f8fcfa; }
-    .model-card h3, .provider-card h3, .route-card h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+    .provider-card, .model-card, .route-card { min-width: 0; border: 1px solid var(--wb-line); border-radius: var(--radius-md); background: #fcfefd; overflow: hidden; }
+    .provider-card > header, .model-card > header, .route-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 13px 14px; border-bottom: 1px solid var(--wb-line); background: #f8fcfa; }
+    .provider-card h3, .model-card h3, .route-card h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
     .subtle { margin: 3px 0 0; color: var(--wb-muted); font-size: 12px; overflow-wrap: anywhere; }
     .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
     .tag { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border-radius: 999px; background: #e8f3ee; color: #315e4d; font-size: 11px; font-weight: 650; }
@@ -97,14 +97,18 @@
     .tag.warn { background: #fff1c7; color: #7c5100; }
     .card-body { padding: 14px; }
     .field-grid { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .field-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .field { min-width: 0; }
     .field.wide { grid-column: 1 / -1; }
     label.field-label { display: block; margin-bottom: 6px; color: #29463a; font-size: 12px; font-weight: 700; }
     .field-help { margin: 5px 0 0; color: var(--wb-muted); font-size: 11px; overflow-wrap: anywhere; }
-    input, select, textarea { width: 100%; max-width: 100%; min-width: 0; min-height: 44px; padding: 10px 11px; border: 1px solid #cbdcd4; border-radius: var(--radius-sm); color: var(--wb-ink); background: #fff; outline: none; transition: border-color 140ms ease, box-shadow 140ms ease; }
-    textarea { min-height: 86px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 13px; }
-    input:focus, select:focus, textarea:focus { border-color: var(--wb-green-500); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14); }
-    input:disabled, select:disabled, textarea:disabled { color: #6b7f76; background: #eef4f1; cursor: not-allowed; }
+    input, select { width: 100%; max-width: 100%; min-width: 0; min-height: 44px; padding: 10px 11px; border: 1px solid #cbdcd4; border-radius: var(--radius-sm); color: var(--wb-ink); background: #fff; outline: none; transition: border-color 140ms ease, box-shadow 140ms ease; }
+    input:focus, select:focus { border-color: var(--wb-green-500); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14); }
+    input:disabled, select:disabled { color: #6b7f76; background: #eef4f1; cursor: not-allowed; }
+    input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; padding: 0; accent-color: var(--wb-green-600); }
+    .check-line { display: flex; align-items: flex-start; gap: 9px; min-height: 36px; padding: 7px 0; color: #29463a; font-size: 12px; }
+    .check-line input { flex: 0 0 auto; margin-top: 2px; }
+    .check-line span { overflow-wrap: anywhere; }
     .button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 9px 14px; border: 1px solid transparent; border-radius: 11px; color: #fff; background: var(--wb-green-700); font-weight: 700; cursor: pointer; transition: transform 120ms ease, background 120ms ease, opacity 120ms ease; }
     .button:hover:not(:disabled) { background: var(--wb-green-600); }
     .button:active:not(:disabled) { transform: translateY(1px); }
@@ -113,51 +117,54 @@
     .button.secondary:hover:not(:disabled) { background: var(--wb-green-50); }
     .button.danger { border-color: #f0c7c7; color: #9f2424; background: #fff7f7; }
     .button.small { min-height: 36px; padding: 7px 10px; font-size: 12px; }
-    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-    .toolbar .button { flex: 0 0 auto; }
     .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .route-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 11px 12px; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .route-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr) minmax(120px, 0.7fr) auto; align-items: center; gap: 8px; padding: 11px 12px; }
     .route-arrow { color: var(--wb-green-700); font-weight: 800; }
-    .route-target { overflow-wrap: anywhere; font-weight: 650; }
     .empty { padding: 18px; border: 1px dashed #c8d9d2; border-radius: var(--radius-md); color: var(--wb-muted); text-align: center; background: #fbfdfc; }
     .notice { margin: 0 0 14px; padding: 12px 13px; border: 1px solid #bcd3c8; border-radius: var(--radius-sm); background: var(--wb-green-50); color: #145c44; overflow-wrap: anywhere; }
     .notice.error { border-color: var(--wb-error-line); background: var(--wb-error-bg); color: #9f1c1c; }
     .notice.info { border-color: var(--wb-warn-line); background: var(--wb-warn-bg); color: #704a00; }
-    .offline-output { min-height: 230px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 1.55; }
+    .state-note { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--wb-green-500); background: var(--wb-green-50); color: #155e45; overflow-wrap: anywhere; }
+    .state-note.warn { border-left-color: #d97706; background: var(--wb-warn-bg); color: #704a00; }
+    .account-actions { margin-top: 10px; }
+    .authorization-link { display: inline-block; margin-top: 7px; color: var(--wb-green-700); font-weight: 700; }
+    .confirmation-types { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--wb-warn-line); border-radius: var(--radius-sm); background: #fffaf0; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
     .action-dock { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(190, 211, 201, 0.9); background: rgba(248, 252, 250, 0.94); backdrop-filter: blur(14px); }
-    .action-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: min(100%, 948px); margin: 0 auto; }
+    .action-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: min(100%, 1048px); margin: 0 auto; }
     .action-copy { min-width: 0; color: var(--wb-muted); font-size: 12px; }
     .action-copy strong { display: block; color: var(--wb-ink); font-size: 13px; }
     .action-inner .button { flex: 0 0 auto; }
-    @media (max-width: 700px) {
+    .offline-panel { position: relative; z-index: 25; }
+    .offline-output { min-height: 230px; max-height: 55vh; margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--wb-line); border-radius: var(--radius-sm); background: #f7fbf9; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 1.55; }
+    @media (max-width: 760px) {
       .shell { padding-right: 12px; padding-left: 12px; }
       .hero { padding-top: 20px; }
       .card { padding: 15px; border-radius: 17px; }
-      .field-grid { grid-template-columns: 1fr; }
+      .field-grid, .field-grid.three { grid-template-columns: 1fr; }
       .field.wide { grid-column: auto; }
-      .route-row { grid-template-columns: 1fr auto; }
-      .route-row .route-target { grid-column: 1 / 2; }
-      .route-row .button { grid-column: 2 / 3; grid-row: 1 / 3; align-self: stretch; }
+      .tabs { grid-template-columns: 1fr; }
+      .route-row { grid-template-columns: 1fr; }
+      .route-row .button { width: 100%; }
       .action-inner { align-items: stretch; flex-direction: column; }
       .action-inner .button { width: 100%; }
-      .mode-options { grid-template-columns: 1fr; }
       .section-head { flex-direction: column; }
       .toolbar { align-items: stretch; }
       .toolbar .button { width: 100%; }
-      .route-row .button { min-width: 0; white-space: normal; }
     }
   </style>
-</head><body>
+</head>
+<body>
   <div class="shell">
     <header class="hero">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">WB</div>
         <div>
           <p class="eyebrow">WorkBuddy 3P</p>
-          <h1>公众模型配置</h1>
+          <h1>模型管理</h1>
         </div>
       </div>
-      <p class="hero-copy">选择模型，调整思考强度和输入窗口，并决定第三方参数由 3P 还是宿主原生优先。密钥保留在私有运行时，不会显示在面板里。</p>
+      <p class="hero-copy">仅支持 OpenAI 兼容的 Chat Completions API；不执行协议转换。先配置供应商和导入模型，再建立模型映射。密钥只保留在私有运行时数据，面板不显示真实凭据。</p>
     </header>
     <section id="connection" class="connection is-connecting" aria-live="polite">
       <span class="connection-dot" aria-hidden="true"></span>
@@ -167,496 +174,967 @@
       </div>
     </section>
     <div id="operation-status" class="notice" hidden role="status" aria-live="polite"></div>
+    <section id="confirmation-panel" class="card" hidden>
+      <div class="section-head"><div><h2>发布前需要明确确认</h2><p>以下确认类型只按原文展示。未点击确认按钮前不会重发 apply，也不会自动发布。</p></div></div>
+      <div id="confirmation-types" class="confirmation-types" aria-live="polite"></div>
+      <div class="inline-actions" style="margin-top:12px"><button id="confirm-apply-button" class="button" type="button">确认以上类型并重试</button><button id="cancel-confirmation-button" class="button secondary" type="button">取消，不重发</button></div>
+    </section>
+    <section id="publication-block-panel" class="card" hidden>
+      <div class="section-head"><div><h2>已阻止重复发布</h2><p id="publication-block-detail">发布结果尚未明确。请先读取 status；在 status 明确返回完整 state 前，apply 不会自动或重复执行。</p></div></div>
+      <div class="inline-actions"><button id="status-recheck-button" class="button secondary" type="button">读取 status 并解除阻止</button></div>
+    </section>
     <section id="waiting-panel" class="card waiting">
       <div class="waiting-symbol" aria-hidden="true">◎</div>
       <h2>等待模型配置</h2>
-      <p id="waiting-detail">尚未收到 initialState。请等待宿主通过 MCP App bridge 返回 tool-result，收到有效 state 后才会显示配置表单。</p>
+      <p id="waiting-detail">尚未收到 initialState。请等待宿主通过 MCP App bridge 返回 tool-result，收到有效 state 后才会显示管理表单。</p>
     </section>
     <main id="settings-panel" hidden>
       <section class="card">
         <div class="section-head">
-          <div><h2>运行模式</h2><p>切换只影响沙箱配置；当前已选模型不会由页面自动更换。</p></div>
+          <div><h2>保存范围</h2><p>默认写入账号同步；仅当前会话属于高级选项，不会自动代替账号同步。</p></div>
         </div>
-        <div class="mode-options" id="mode-options">
-          <label class="mode-option" for="mode-official"><input id="mode-official" name="configured-mode" type="radio" value="official"><span>官方模式</span></label>
-          <label class="mode-option" for="mode-third-party"><input id="mode-third-party" name="configured-mode" type="radio" value="third-party"><span>第三方模式</span></label>
+        <div class="scope-options">
+          <label class="choice" for="scope-account"><input id="scope-account" type="radio" name="save-scope" value="account" checked><span><strong>账号同步（scope=account，默认）</strong><small>保存后按宿主能力同步到新会话。</small></span></label>
+          <details class="advanced">
+            <summary>高级选项：仅当前会话</summary>
+            <label class="choice" for="scope-session" style="margin-top:10px"><input id="scope-session" type="radio" name="save-scope" value="session"><span><strong>仅当前会话（scope=session）</strong><small>不承诺账号同步，重启或新会话可能丢失。</small></span></label>
+          </details>
         </div>
-        <div class="field-grid" style="margin-top:14px">
-          <div class="field wide">
-            <label class="field-label" for="parameter-priority">参数优先级</label>
-            <select id="parameter-priority" aria-describedby="parameter-priority-help">
-              <option value="3p">3P 优先（第三方请求按 3P 声明参数）</option>
-              <option value="native">宿主原生优先（原生直连）</option>
-            </select>
-            <p id="parameter-priority-help" class="field-help">3P 优先启用目标云端宿主内的自运行回环参数适配；official 模式拒绝代理转发。宿主原生优先走原生直连，关闭 3P 强制参数；旧缓存代理返回 410，需重选模型，不做透明透传。未知模型不伪造参数。</p>
-          </div>
+        <div id="account-sync-status" class="state-note" role="status" aria-live="polite"></div>
+        <div class="inline-actions account-actions">
+          <button id="account-connect-button" class="button secondary" type="button">连接 WorkBuddy 账号</button>
+          <button id="account-finish-button" class="button" type="button" hidden>我已完成授权，检查连接</button>
         </div>
-        <details style="margin-top:12px"><summary>配置来源与生效说明</summary><dl class="summary-grid" id="source-summary"></dl>
-        <ul class="warning-list">
-          <li>保存后需按宿主路径刷新模型目录，并重新选择模型；仅刷新页面不能证明目录已更新。</li>
-          <li>这里只证明配置已写入，不证明真实请求已按新配置运行（runtimeVerified=false）。</li>
-          <li>当前沙箱不会自动同步到新会话；新沙箱仍使用其账号默认配置。</li>
-        </ul>
-        <p id="state-note" class="state-note" hidden></p></details>
+        <div id="account-login-status" class="state-note" role="status" aria-live="polite" hidden></div>
+        <div class="field-grid" style="margin-top:12px">
+          <div class="field"><label class="field-label" for="model-source">模型来源</label><select id="model-source"><option value="official">官方</option><option value="third-party">第三方 API</option></select></div>
+          <div class="field"><label class="field-label" for="parameter-priority">参数优先级</label><select id="parameter-priority"><option value="3p">采用路由设置</option><option value="native">采用宿主请求参数</option></select></div>
+        </div>
       </section>
-      <section class="card">
-        <div class="section-head">
-          <div><h2>模型参数</h2><p>支持的档位因模型而异。留空输入窗口可恢复模型默认值。</p></div>
-          <button id="max-effort-button" class="button secondary" type="button">全部设为各自最高可用档</button>
-        </div>
-        <p class="field-help" style="margin:-4px 0 12px">一键操作会为每个模型选择其声明的最高档位；不支持 max 的模型不会写成 max。</p>
-        <label class="field-label" for="model-selector">选择要配置的模型</label><select id="model-selector" style="width:100%;margin-bottom:14px"></select>
-        <div id="model-list" class="list"></div>
+      <div class="tabs" role="tablist" aria-label="模型管理层级">
+        <button id="tab-providers" class="tab" type="button" role="tab" aria-selected="true" aria-controls="panel-providers">供应商及模型</button>
+        <button id="tab-routing" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-routing">路由</button>
+      </div>
+      <section id="panel-providers" role="tabpanel" aria-labelledby="tab-providers">
+        <section class="card">
+          <div class="section-head"><div><h2>供应商与凭据引用</h2><p>仅支持 OpenAI 兼容的 Chat Completions API；不执行协议转换。旧配置中的来源模板字段只原样保留，不提供编辑输入。</p></div></div>
+          <div id="provider-list" class="list" style="margin-bottom:16px"></div>
+          <div class="provider-card">
+            <header><div><h3>新增供应商</h3><p class="subtle">创建时只登记环境变量名，不输入密钥值。模型能力未知时保持未知，不自动猜测。</p></div></header>
+            <div class="card-body">
+              <div class="field-grid">
+                <div class="field"><label class="field-label" for="new-provider-id">Provider ID</label><input id="new-provider-id" autocomplete="off" placeholder="例如：my-provider"></div>
+                <div class="field"><p class="field-help">仅支持 OpenAI 兼容的 Chat Completions API；不执行协议转换。</p><input id="new-provider-protocol" type="hidden" value="openai-chat"></div>
+                <div class="field"><label class="field-label" for="new-provider-label">显示名称 label</label><input id="new-provider-label" autocomplete="off" placeholder="例如：我的服务"></div>
+                <div class="field"><label class="field-label" for="new-provider-base-url">Base URL</label><input id="new-provider-base-url" autocomplete="off" inputmode="url" placeholder="例如：https://api.example.com/v1"></div>
+                <div class="field"><label class="field-label" for="new-provider-api-key-env">凭据环境变量名</label><input id="new-provider-api-key-env" autocomplete="off" spellcheck="false" placeholder="例如：MY_PROVIDER_API_KEY"><p class="field-help">只填写环境变量名称，不要填写密钥值。</p></div>
+                <div class="field"><label class="field-label" for="new-provider-extra-models">额外模型 ID（逗号或换行分隔）</label><input id="new-provider-extra-models" autocomplete="off" placeholder="可选；能力仍保持未知"></div>
+              </div>
+              <div class="inline-actions" style="margin-top:12px"><button id="add-provider-button" class="button" type="button">加入供应商草稿（尚未保存）</button></div>
+            </div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="section-head"><div><h2>发现与连通测试</h2><p>发现和探针都只证明原生端点；探针不代表宿主协议支持，也不会修改配置。</p></div></div>
+          <div id="discovery-workbench" class="list"></div>
+        </section>
       </section>
-      <details class="card"><summary style="cursor:pointer;font-weight:700">自定义 API / Provider 与路由</summary>
-        <div class="section-head">
-          <div><h2>Provider 与路由</h2><p>Provider 只保存环境变量名；页面不读取、输入或显示 API Key 值。</p></div>
-        </div>
-        <div class="field-grid" style="margin-bottom:14px">
-          <div class="field"><label class="field-label" for="default-provider">默认 Provider</label><select id="default-provider"></select></div>
-          <div class="field"><label class="field-label" for="routing-mode">路由模式</label><select id="routing-mode"><option value="same-name">same-name（同名优先）</option><option value="preset-only">preset-only（仅预设）</option><option value="explicit">explicit（仅显式路由）</option></select></div>
-        </div>
-        <div class="toolbar"><div><strong style="display:block;font-size:14px">已配置 Provider</strong><span class="field-help">编辑非凭据字段时，API Key 环境变量名可留空以保持原值。</span></div></div>
-        <div id="provider-list" class="list" style="margin-bottom:16px"></div>
-        <div class="provider-card">
-          <header><div><h3>新增 Provider</h3><p class="subtle">Provider ID 保存后不可在表单中改名；请使用唯一、稳定的名称。</p></div></header>
-          <div class="card-body">
-            <div class="field-grid">
-              <div class="field"><label class="field-label" for="new-provider-id">Provider ID</label><input id="new-provider-id" autocomplete="off" placeholder="例如：my-provider"></div>
-              <div class="field"><label class="field-label" for="new-provider-label">显示名称 label</label><input id="new-provider-label" autocomplete="off" placeholder="例如：我的服务"></div>
-              <div class="field"><label class="field-label" for="new-provider-base-url">Base URL</label><input id="new-provider-base-url" autocomplete="off" inputmode="url" placeholder="OpenAI-compatible /v1 地址"></div>
-              <div class="field"><label class="field-label" for="new-provider-preset">Preset</label><input id="new-provider-preset" autocomplete="off" placeholder="例如：bailian，可留空"></div>
-              <div class="field"><label class="field-label" for="new-provider-api-key-env">API Key 环境变量名</label><input id="new-provider-api-key-env" autocomplete="off" spellcheck="false" placeholder="例如：MY_PROVIDER_API_KEY"><p class="field-help">只填写环境变量名称，不要填写密钥值。</p></div>
-              <div class="field"><label class="field-label" for="new-provider-extra-models">额外模型</label><textarea id="new-provider-extra-models" spellcheck="false" placeholder="一行一个，也可用逗号分隔"></textarea></div>
-            </div>
-            <div class="inline-actions" style="margin-top:12px"><button id="add-provider-button" class="button" type="button">添加 Provider</button></div>
+      <section id="panel-routing" role="tabpanel" aria-labelledby="tab-routing" hidden>
+        <section class="card">
+          <div class="section-head"><div><h2>显式路由</h2><p>选择官方模型名或输入别名，目标必须是已导入的 provider:model。没有同名自动映射。</p></div></div>
+          <div class="field-grid three" style="margin-bottom:14px">
+            <div class="field"><label class="field-label" for="route-source">官方模型名或输入别名</label><input id="route-source" list="official-model-options" autocomplete="off" placeholder="选择官方模型 ID"><datalist id="official-model-options"></datalist></div>
+            <div class="field"><label class="field-label" for="route-target">目标 provider:model</label><select id="route-target"></select></div>
+            <div class="field"><label class="field-label" for="add-route-button">操作</label><button id="add-route-button" class="button" type="button">加入路由草稿（尚未保存）</button></div>
           </div>
-        </div>
-        <div class="toolbar" style="margin-top:20px"><div><strong style="display:block;font-size:14px">显式路由</strong><span class="field-help">删除已有路由会提交 null，表示恢复官方路由。</span></div></div>
-        <div id="route-list" class="list" style="margin-bottom:12px"></div>
-        <div class="provider-card">
-          <header><div><h3>新增路由</h3><p class="subtle">别名通常是官方模型 ID；目标可写 provider:model、provider、model 或 official。</p></div></header>
-          <div class="card-body">
-            <div class="field-grid">
-              <div class="field"><label class="field-label" for="new-route-alias">路由别名 alias</label><input id="new-route-alias" autocomplete="off" placeholder="例如：hy3"></div>
-              <div class="field"><label class="field-label" for="new-route-target">路由目标 target</label><input id="new-route-target" list="route-target-options" autocomplete="off" placeholder="例如：my-provider:upstream-model"></div>
-            </div>
-            <div class="inline-actions" style="margin-top:12px"><button id="add-route-button" class="button" type="button">添加路由</button></div>
-          </div>
-        </div>
-        <datalist id="route-target-options"></datalist>
-      </details>
-      <section id="offline-panel" class="card" hidden>
-        <div class="section-head"><div><h2>离线指令 fallback</h2><p>这里只生成待发送内容，不代表设置已经应用。复制到原会话发送后才会生效。</p></div></div>
-        <div class="notice info" id="offline-status">尚未应用：请复制下方内容到原会话发送。</div>
-        <label class="field-label" for="offline-output">models_settings 调用指令</label>
-        <textarea id="offline-output" class="offline-output" readonly spellcheck="false"></textarea>
-        <div class="inline-actions" style="margin-top:12px"><button id="copy-offline-button" class="button secondary" type="button">复制指令</button><button id="download-offline-button" class="button secondary" type="button">下载无密钥 JSON 草案</button></div>
+          <div id="route-list" class="list"></div>
+        </section>
       </section>
     </main>
+    <section id="offline-panel" class="card offline-panel" hidden>
+      <div class="section-head"><div><h2>离线工具指令草稿</h2><p>复制到原会话后才可能执行；复制、预览或下载都不代表成功，也不含真实密钥。</p></div></div>
+      <pre id="offline-output" class="offline-output"></pre>
+      <div class="inline-actions" style="margin-top:12px"><button id="copy-offline-button" class="button secondary" type="button">复制离线指令</button><button id="download-offline-button" class="button secondary" type="button">下载无密钥 JSON 草案</button></div>
+      <p id="offline-status" class="field-help">尚未应用；复制成功也不代表宿主已写入。</p>
+    </section>
   </div>
-  <div class="action-dock">
-    <div class="action-inner">
-      <div class="action-copy"><strong id="action-title">等待模型配置</strong><span id="action-detail">收到 state 后才能编辑或生成指令。</span></div>
-      <button id="apply-button" class="button" type="button" disabled>等待配置</button>
-    </div>
-  </div>
+  <div class="action-dock"><div class="action-inner"><div class="action-copy"><strong id="action-title">等待模型配置</strong><span id="action-detail">收到有效 state 后才会显示可保存的操作。</span></div><button id="apply-button" class="button" type="button" disabled>等待配置</button></div></div>
   <script type="application/json" id="initial-state">__WB3P_STATE__</script>
   <script id="wb3p-bridge">__WB3P_BRIDGE__</script>
-  <script id="wb3p-ui">  "use strict";
+  <script id="wb3p-ui">
+  "use strict";
   (function () {
+    var PROTOCOLS = ["openai-chat"];
+    var ALLOWED_WORKBUDDY_ORIGIN = "https://www.workbuddy.cn";
     var EFFORT_ORDER = ["minimal", "low", "medium", "high", "xhigh", "max"];
-    var app = { original: null, draft: null, bridge: null, bridgeReady: false, bridgeConnecting: false, busy: false, pendingApply: null, nextLocalId: 0 };
+    var app = {
+      original: null,
+      draft: null,
+      bridge: null,
+      bridgeReady: false,
+      bridgeConnecting: false,
+      pendingApply: null,
+      pendingConfirmation: null,
+      publicationBlocked: null,
+      accountAuthorizationUrl: null,
+      offlineRequest: null,
+      busy: false,
+      nextLocalId: 0
+    };
+
     function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
-    function hasOwn(object, key) { return Object.prototype.hasOwnProperty.call(object || {}, key); }
-    function copy(value) { return value === undefined || value === null ? value : JSON.parse(JSON.stringify(value)); }
-    function text(value, fallback) { return value === undefined || value === null || value === "" ? fallback || "" : String(value); }
-    function normalizeInteger(value) { if (value === null || value === undefined || value === "") return null; var number = Number(value); return Number.isFinite(number) && number > 0 ? Math.floor(number) : null; }
+    function copy(value) { return value === undefined ? undefined : JSON.parse(JSON.stringify(value)); }
+    function createElement(tag, className, textValue) {
+      var node = document.createElement(tag);
+      if (className) node.className = className;
+      if (textValue !== undefined) node.textContent = textValue;
+      return node;
+    }
+    function appendText(parent, tag, className, textValue) { var node = createElement(tag, className, textValue); parent.appendChild(node); return node; }
+    function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
     function uniqueStrings(values) {
-      var result = [], seen = new Set(), list = Array.isArray(values) ? values : [];
-      list.forEach(function (value) { var item = text(value).trim(); if (item && !seen.has(item)) { seen.add(item); result.push(item); } });
-      return result;
+      var out = [], seen = Object.create(null);
+      (Array.isArray(values) ? values : []).forEach(function (value) {
+        var text = typeof value === "string" ? value.trim() : "";
+        if (text && !seen[text]) { seen[text] = true; out.push(text); }
+      });
+      return out;
     }
-    function sortEfforts(values) { var declared = new Set(Array.isArray(values) ? values.map(String) : []); return EFFORT_ORDER.filter(function (level) { return declared.has(level); }); }
-    function highestSupportedEffort(values) { var sorted = sortEfforts(values); return sorted.length ? sorted[sorted.length - 1] : null; }
-    function effortOptionValues(model) { var values = []; if (model && model.canDisableThinking === true) values.push("off", "on"); return values.concat(sortEfforts(model && model.supportedEfforts)); }
+    function splitList(value) {
+      if (Array.isArray(value)) return uniqueStrings(value);
+      if (typeof value !== "string") return [];
+      return uniqueStrings(value.split(/[\n,]+/));
+    }
+    function normalizeProtocol(value) { return PROTOCOLS.indexOf(value) >= 0 ? value : ""; }
+    function normalizeBoolean(value) { return value === true ? true : value === false ? false : null; }
+    function normalizePositiveInt(value) {
+      if (value === null || value === undefined || value === "") return null;
+      var number = typeof value === "number" ? value : Number(value);
+      return Number.isInteger(number) && number > 0 ? number : null;
+    }
+    function normalizeText(value) { return typeof value === "string" ? value.trim() : ""; }
+    function normalizeOptionalText(value) { var text = normalizeText(value); return text || null; }
+    function normalizeConfiguredMode(value) { return value === "third-party" ? "third-party" : "official"; }
     function normalizeParameterPriority(value) { return value === "native" ? "native" : "3p"; }
-    function looksLikeState(value) { return isObject(value) && hasOwn(value, "revision") && Array.isArray(value.models) && Array.isArray(value.providers) && isObject(value.routes); }
-    function extractState(value, depth) {
-      if (looksLikeState(value)) return value;
-      if (!isObject(value) || (depth || 0) > 3) return null;
-      var candidates = [
-        value.state, value.structuredContent, value.structuredContent && value.structuredContent.state,
-        value.content, value.content && value.content.structuredContent,
-        value.content && value.content.structuredContent && value.content.structuredContent.state,
-        value.params, value.params && value.params.structuredContent,
-        value.params && value.params.structuredContent && value.params.structuredContent.state,
-        value.result, value.result && value.result.structuredContent,
-        value.result && value.result.structuredContent && value.result.structuredContent.state
-      ];
-      for (var index = 0; index < candidates.length; index += 1) {
-        var found = extractState(candidates[index], (depth || 0) + 1);
-        if (found) return found;
-      }
-      return null;
+    function normalizeList(value) {
+      if (value === null || value === undefined) return null;
+      return splitList(value);
     }
-    function normalizeState(value) {
-      var source = isObject(value) ? value : {};
-      var providers = Array.isArray(source.providers) ? source.providers.map(function (provider, index) {
-        var item = isObject(provider) ? provider : {}, credential = isObject(item.credential) ? item.credential : {};
-        return {
-          id: text(item.id, "provider-" + (index + 1)), label: text(item.label, text(item.id, "Provider " + (index + 1))),
-          baseUrl: text(item.baseUrl), preset: text(item.preset), apiKeyEnv: text(item.apiKeyEnv), apiKeyEnvTouched: item.apiKeyEnvTouched === true, reuseCredential: item.reuseCredential === true,
-          extraModels: uniqueStrings(item.extraModels), credential: { kind: text(credential.kind, "unknown"), configured: credential.configured === true }
-        };
-      }).filter(function (provider) { return provider.id !== ""; }) : [];
-      var models = Array.isArray(source.models) ? source.models.map(function (model, index) {
-        var item = isObject(model) ? model : {}, id = text(item.id, "model-" + (index + 1));
-        return {
-          target: text(item.target, id), id: id, aliases: uniqueStrings(item.aliases), supportedEfforts: sortEfforts(item.supportedEfforts),
-          canDisableThinking: item.canDisableThinking === true,
-          configuredEffort: item.configuredEffort === null || item.configuredEffort === undefined ? null : String(item.configuredEffort),
-          maxInputTokens: normalizeInteger(item.maxInputTokens), maxOutputTokens: normalizeInteger(item.maxOutputTokens), baseInputTokens: normalizeInteger(item.baseInputTokens)
-        };
-      }).filter(function (model) { return model.target !== ""; }) : [];
-      var routes = {};
-      if (isObject(source.routes)) Object.keys(source.routes).forEach(function (alias) { if (source.routes[alias] !== null && source.routes[alias] !== undefined) routes[alias] = String(source.routes[alias]); });
+    function normalizeProtocolCompat(value) {
+      if (value === null || value === undefined) return null;
+      if (isObject(value)) {
+        var enabled = [];
+        PROTOCOLS.forEach(function (protocol) { if (value[protocol] === true) enabled.push(protocol); });
+        return enabled;
+      }
+      var list = splitList(value).filter(function (protocol) { return PROTOCOLS.indexOf(protocol) >= 0; });
+      return list;
+    }
+    function normalizeCapability(value) {
+      var item = isObject(value) ? value : {};
+      var capabilities = isObject(item.capabilities) ? item.capabilities : {};
+      var reasoning = isObject(item.reasoning) ? item.reasoning : {};
+      var ctx = item.maxInputTokens !== undefined ? item.maxInputTokens : item.ctx;
       return {
-        revision: source.revision === undefined ? null : source.revision, parameterPriority: normalizeParameterPriority(source.parameterPriority), configuredMode: text(source.configuredMode, "default"),
-        sourceKind: text(source.sourceKind, "unknown"), readOnly: source.readOnly === true,
-        defaultProvider: source.defaultProvider === null || source.defaultProvider === undefined ? null : String(source.defaultProvider),
-        routingMode: text(source.routingMode, "same-name"), providers: providers, routes: routes, models: models, note: text(source.note),
-        switchMode: source.switchMode === undefined ? text(source.configuredMode, "default") : String(source.switchMode), maxEffortRequested: source.maxEffortRequested === true
+        maxInputTokens: normalizePositiveInt(ctx),
+        maxOutputTokens: normalizePositiveInt(item.maxOutputTokens),
+        supportsTools: normalizeBoolean(item.supportsTools !== undefined ? item.supportsTools : item.supportsToolCall !== undefined ? item.supportsToolCall : capabilities.tools),
+        supportsImages: normalizeBoolean(item.supportsImages !== undefined ? item.supportsImages : capabilities.images),
+        supportedEfforts: normalizeList(item.supportedEfforts !== undefined ? item.supportedEfforts : reasoning.supportedEfforts),
+        canDisableThinking: normalizeBoolean(item.canDisableThinking !== undefined ? item.canDisableThinking : reasoning.canDisableThinking),
+        defaultEffort: normalizeOptionalText(item.defaultEffort !== undefined ? item.defaultEffort : reasoning.defaultEffort),
+        protocolCompat: normalizeProtocolCompat(item.protocolCompat),
+        touched: {}
       };
     }
-    function arrayEqual(left, right) { var a = Array.isArray(left) ? left : [], b = Array.isArray(right) ? right : []; if (a.length !== b.length) return false; for (var index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false; return true; }
-    function sameScalar(left, right) { var a = left === undefined || left === null || left === "" ? null : String(left), b = right === undefined || right === null || right === "" ? null : String(right); return a === b; }
-    function makePatch(originalValue, draftValue) {
-      var original = normalizeState(originalValue), draft = normalizeState(draftValue), patch = {};
-      if (!sameScalar(draft.parameterPriority, original.parameterPriority)) patch.parameterPriority = draft.parameterPriority;
-      if (draft.switchMode && !sameScalar(draft.switchMode, original.configuredMode)) patch.switchMode = draft.switchMode;
-      var originalModels = new Map();
-      original.models.forEach(function (model) { originalModels.set(model.target, model); });
-      var efforts = {}, contexts = {};
-      draft.models.forEach(function (model) {
-        var previous = originalModels.get(model.target);
-        if (!previous) return;
-        var currentEffort = model.configuredEffort === null ? null : String(model.configuredEffort);
-        var previousEffort = previous.configuredEffort === null ? null : String(previous.configuredEffort);
-        if (currentEffort !== previousEffort) efforts[model.target] = currentEffort;
-        var currentContext = normalizeInteger(model.maxInputTokens), previousContext = normalizeInteger(previous.maxInputTokens);
-        if (currentContext !== previousContext) contexts[model.target] = currentContext;
+    function normalizeCapabilityMap(value) {
+      var result = {}, source = isObject(value) ? value : {};
+      Object.keys(source).forEach(function (id) {
+        var modelId = normalizeText(id);
+        if (!modelId) return;
+        result[modelId] = normalizeCapability(source[id]);
       });
-      if (Object.keys(efforts).length && draft.maxEffortRequested !== true) patch.efforts = efforts;
-      if (Object.keys(contexts).length) patch.contexts = contexts;
-      var originalProviders = new Map();
-      original.providers.forEach(function (provider) { originalProviders.set(provider.id, provider); });
-      var providers = {};
-      draft.providers.forEach(function (provider) {
-        var previous = originalProviders.get(provider.id);
-        var endpointChanged = !previous || !sameScalar(provider.baseUrl, previous.baseUrl) || !sameScalar(provider.preset, previous.preset);
-        var changed = endpointChanged || !sameScalar(provider.label, previous.label) ||
-          !arrayEqual(provider.extraModels, previous.extraModels) ||
-          (provider.apiKeyEnvTouched && !sameScalar(provider.apiKeyEnv, previous.apiKeyEnv));
-        if (!changed) return;
-        var entry = { label: provider.label, baseUrl: provider.baseUrl, preset: provider.preset, extraModels: provider.extraModels.slice() };
-        if (!previous || provider.apiKeyEnvTouched) entry.apiKeyEnv = provider.apiKeyEnv;
-        if (endpointChanged && provider.reuseCredential) entry.reuseCredential = true;
-        providers[provider.id] = entry;
-      });
-      if (Object.keys(providers).length) patch.providers = providers;
-      if (!sameScalar(draft.defaultProvider, original.defaultProvider)) patch.defaultProvider = draft.defaultProvider || "";
-      if (!sameScalar(draft.routingMode, original.routingMode)) patch.routingMode = draft.routingMode;
-      var routes = {}, aliases = new Set(Object.keys(original.routes).concat(Object.keys(draft.routes)));
-      aliases.forEach(function (alias) {
-        var currentHas = hasOwn(draft.routes, alias), previousHas = hasOwn(original.routes, alias);
-        if (!currentHas && previousHas) routes[alias] = null;
-        else if (currentHas && (!previousHas || !sameScalar(draft.routes[alias], original.routes[alias]))) routes[alias] = draft.routes[alias];
-      });
-      if (Object.keys(routes).length) patch.routes = routes;
-      if (draft.maxEffortRequested === true) patch.maxEffort = true;
-      return patch;
-    }    function createElement(tagName, className, content) { var node = document.createElement(tagName); if (className) node.className = className; if (content !== undefined && content !== null) node.textContent = String(content); return node; }
-    function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
-    function appendText(parent, tagName, className, content) { var node = createElement(tagName, className, content); parent.appendChild(node); return node; }
-    function fieldLabel(forId, labelText, helpText) { var label = createElement("label", "field-label", labelText); label.setAttribute("for", forId); if (helpText) label.setAttribute("title", helpText); return label; }
-    function setConnection(kind, title, detail) { document.getElementById("connection").className = "connection is-" + kind; document.getElementById("connection-title").textContent = title; document.getElementById("connection-detail").textContent = detail; }
-    function setStatus(kind, message) { var box = document.getElementById("operation-status"); box.hidden = false; box.className = "notice" + (kind === "error" ? " error" : kind === "info" ? " info" : ""); box.textContent = message; }
-    function hideStatus() { var box = document.getElementById("operation-status"); box.hidden = true; box.textContent = ""; }
-    function setBusy(value) { app.busy = value === true; refreshAction(); }
-    function readInitialState() {
-      var node = document.getElementById("initial-state"); if (!node) return null;
-      var raw = node.textContent.trim(); if (!raw || raw === "__WB3P" + "_STATE__") return null;
-      try { return extractState(JSON.parse(raw)); }
-      catch (error) { setStatus("error", "initialState JSON 解析失败；表单未使用任何回退假数据。"); return null; }
+      return result;
     }
-    function providerLabel(id) { var providers = app.draft ? app.draft.providers : []; for (var index = 0; index < providers.length; index += 1) if (providers[index].id === id) return providers[index].label || providers[index].id; return id || "无"; }
-    function renderSummary() {
-      var container = document.getElementById("source-summary"); clear(container);
-      var rows = [["配置来源 sourceKind", app.original.sourceKind], ["已配置模式", app.original.configuredMode], ["参数优先级", app.original.parameterPriority === "native" ? "宿主原生优先" : "3P 优先"], ["是否只读", app.original.readOnly ? "是" : "否"], ["默认 Provider", app.original.defaultProvider ? providerLabel(app.original.defaultProvider) : "未设置"], ["路由模式", app.original.routingMode]];
-      rows.forEach(function (row) { var item = createElement("div", "summary-item"); appendText(item, "dt", "", row[0]); appendText(item, "dd", "", row[1]); container.appendChild(item); });
-      var note = document.getElementById("state-note"); note.hidden = !app.original.note; note.textContent = app.original.note || "";
+    function normalizeProvider(value) {
+      var item = isObject(value) ? value : {};
+      return {
+        id: normalizeText(item.id),
+        protocol: normalizeProtocol(item.protocol),
+        label: normalizeText(item.label),
+        baseUrl: normalizeText(item.baseUrl),
+        apiKeyEnv: normalizeText(item.apiKeyEnv),
+        apiKeyEnvTouched: false,
+        reuseCredential: item.reuseCredential === true,
+        extraModels: uniqueStrings(item.extraModels),
+        credential: isObject(item.credential) ? { configured: item.credential.configured === true ? true : item.credential.configured === false ? false : null, kind: normalizeText(item.credential.kind) } : { configured: null, kind: "" },
+        nativeSessionSupported: item.nativeSessionSupported === true,
+        hostProtocolReason: normalizeText(item.hostProtocolReason),
+        models: normalizeCapabilityMap(item.models),
+        discovery: null,
+        probe: null
+      };
     }
-    function renderMode() {
-      var official = document.getElementById("mode-official"), thirdParty = document.getElementById("mode-third-party");
-      official.checked = app.draft.switchMode === "official"; thirdParty.checked = app.draft.switchMode === "third-party";
-      official.disabled = app.original.readOnly; thirdParty.disabled = app.original.readOnly;
-      var priority = document.getElementById("parameter-priority"); priority.value = app.draft.parameterPriority;
+    function normalizeProviders(value) {
+      if (Array.isArray(value)) return value.map(normalizeProvider).filter(function (provider) { return provider.id; });
+      if (!isObject(value)) return [];
+      return Object.keys(value).map(function (id) { return normalizeProvider(Object.assign({ id: id }, isObject(value[id]) ? value[id] : {})); });
     }
-    function modelMeta(model) { var bits = []; if (model.maxOutputTokens) bits.push("配置输出预算 " + model.maxOutputTokens); if (model.baseInputTokens) bits.push("输入上限 " + model.baseInputTokens); return bits.join(" · ") || "宿主未提供 token 元数据"; }
-    function renderModels() {
-      var container = document.getElementById("model-list"); clear(container);
-      if (!app.draft.models.length) { container.appendChild(createElement("div", "empty", "当前 state 没有可配置模型。")); return; }
-      var selector = document.getElementById("model-selector"), selected = selector.value; clear(selector);
-      app.draft.models.forEach(function (model) { var option = createElement("option", "", model.id); option.value = model.target; selector.appendChild(option); });
-      selector.value = app.draft.models.some(function (m) { return m.target === selected; }) ? selected : app.draft.models[0].target;
-      app.draft.models.forEach(function (model, index) {
-        var card = createElement("article", "model-card"), header = createElement("header"), headText = createElement("div");
-        card.dataset.target = model.target; card.hidden = model.target !== selector.value;
-        appendText(headText, "h3", "", model.id); appendText(headText, "p", "subtle", "target: " + model.target);
-        if (model.aliases.length) { var tags = createElement("div", "tags"); model.aliases.forEach(function (alias) { appendText(tags, "span", "tag", "alias: " + alias); }); headText.appendChild(tags); }
-        header.appendChild(headText); card.appendChild(header);
-        var body = createElement("div", "card-body"), grid = createElement("div", "field-grid");
-        var effortField = createElement("div", "field"), effortId = "model-effort-" + index;
-        effortField.appendChild(fieldLabel(effortId, "思考档位"));
-        var effort = createElement("select"); effort.id = effortId;
-        var defaultOption = createElement("option", "", "默认（提交 null）"); defaultOption.value = "__default__"; effort.appendChild(defaultOption);
-        var options = effortOptionValues(model), currentUnsupported = model.configuredEffort && options.indexOf(model.configuredEffort) === -1;
-        options.forEach(function (level) {
-          var optionLabel = level === "off" ? "关闭思考（off）" : level === "on" ? (model.supportedEfforts.length ? "开启思考（默认档位）" : "开启思考（无强度档位）") : level;
-          var option = createElement("option", "", optionLabel); option.value = level; effort.appendChild(option);
-        });
-        effort.value = model.configuredEffort === null || currentUnsupported ? "__default__" : model.configuredEffort; effort.disabled = app.original.readOnly;
-        effort.addEventListener("change", function () { model.configuredEffort = effort.value === "__default__" ? null : effort.value; app.draft.maxEffortRequested = false; refreshAction(); });
-        effortField.appendChild(effort);
-        var effortHelp = "可选：" + (options.length ? options.join(", ") : "宿主未声明可调档位");
-        if (currentUnsupported) effortHelp += "；当前配置 " + model.configuredEffort + " 未在 supportedEfforts 中声明，未作为可调档显示";
-        else if (model.canDisableThinking) effortHelp += "；off/on 由 canDisableThinking=true 开放";
-        effortField.appendChild(createElement("p", "field-help", effortHelp)); grid.appendChild(effortField);
-        var contextField = createElement("div", "field"), contextId = "model-context-" + index;
-        contextField.appendChild(fieldLabel(contextId, "最大输入 token"));
-        var context = createElement("input"); context.id = contextId; context.type = "number"; context.min = "1024"; context.max = String(model.baseInputTokens || ""); context.step = "1"; context.inputMode = "numeric";
-        context.placeholder = model.baseInputTokens ? String(model.baseInputTokens) : "留空使用默认"; context.value = model.maxInputTokens === null ? "" : String(model.maxInputTokens); context.disabled = app.original.readOnly;
-        context.addEventListener("input", function () { model.maxInputTokens = normalizeInteger(context.value); refreshAction(); });
-        contextField.appendChild(context); contextField.appendChild(createElement("p", "field-help", "清空并保存会提交 null；" + modelMeta(model))); grid.appendChild(contextField);
-        body.appendChild(grid); card.appendChild(body); container.appendChild(card);
-      });
+    function parseProviderTarget(value) {
+      var text = normalizeText(value), index = text.indexOf(":");
+      if (index <= 0 || index >= text.length - 1) return null;
+      return { provider: text.slice(0, index), model: text.slice(index + 1) };
     }
-    function renderProviderList() {
-      var container = document.getElementById("provider-list"); clear(container);
-      if (!app.draft.providers.length) { container.appendChild(createElement("div", "empty", "尚未配置 Provider。")); return; }
-      app.draft.providers.forEach(function (provider, index) {
-        var card = createElement("article", "provider-card"), header = createElement("header"), headText = createElement("div");
-        appendText(headText, "h3", "", provider.label || provider.id); appendText(headText, "p", "subtle", "id: " + provider.id); header.appendChild(headText);
-        var tags = createElement("div", "tags"); appendText(tags, "span", "tag " + (provider.credential.configured ? "ok" : "warn"), provider.credential.configured ? "凭据已配置" : "凭据未配置");
-        appendText(tags, "span", "tag", "kind: " + provider.credential.kind); header.appendChild(tags); card.appendChild(header);
-        var body = createElement("div", "card-body"), grid = createElement("div", "field-grid");
-        var labelField = createElement("div", "field"), labelId = "provider-" + index + "-label"; labelField.appendChild(fieldLabel(labelId, "显示名称 label"));
-        var labelInput = createElement("input"); labelInput.id = labelId; labelInput.autocomplete = "off"; labelInput.value = provider.label; labelInput.disabled = app.original.readOnly;
-        labelInput.addEventListener("input", function () { provider.label = labelInput.value; refreshAction(); }); labelField.appendChild(labelInput); grid.appendChild(labelField);
-        var baseField = createElement("div", "field"), baseId = "provider-" + index + "-base-url"; baseField.appendChild(fieldLabel(baseId, "Base URL"));
-        var baseInput = createElement("input"); baseInput.id = baseId; baseInput.autocomplete = "off"; baseInput.inputMode = "url"; baseInput.value = provider.baseUrl; baseInput.disabled = app.original.readOnly;
-        baseInput.addEventListener("input", function () { provider.baseUrl = baseInput.value; refreshAction(); }); baseField.appendChild(baseInput); grid.appendChild(baseField);
-        var presetField = createElement("div", "field"), presetId = "provider-" + index + "-preset"; presetField.appendChild(fieldLabel(presetId, "Preset"));
-        var presetInput = createElement("input"); presetInput.id = presetId; presetInput.autocomplete = "off"; presetInput.value = provider.preset; presetInput.disabled = app.original.readOnly;
-        presetInput.addEventListener("input", function () { provider.preset = presetInput.value; refreshAction(); }); presetField.appendChild(presetInput); grid.appendChild(presetField);
-        var isExistingProvider = app.original.providers.some(function (item) { return item.id === provider.id; });
-        if (isExistingProvider) {
-          var reuseField = createElement("div", "field wide"), reuseLabel = createElement("label", "mode-option");
-          var reuseInput = createElement("input"); reuseInput.type = "checkbox"; reuseInput.checked = provider.reuseCredential === true; reuseInput.disabled = app.original.readOnly;
-          reuseInput.addEventListener("change", function () { provider.reuseCredential = reuseInput.checked; refreshAction(); });
-          reuseLabel.appendChild(reuseInput); appendText(reuseLabel, "span", "", "更换地址时复用原凭据"); reuseField.appendChild(reuseLabel);
-          reuseField.appendChild(createElement("p", "field-help", "默认不勾选。修改 Base URL 或 Preset 时，需勾选此项或填写新的 API Key 环境变量名。"));
-          grid.appendChild(reuseField);
-        }
-        var envField = createElement("div", "field"), envId = "provider-" + index + "-api-key-env"; envField.appendChild(fieldLabel(envId, "API Key 环境变量名"));
-        var envInput = createElement("input"); envInput.id = envId; envInput.autocomplete = "off"; envInput.spellcheck = false; envInput.value = provider.apiKeyEnv; envInput.placeholder = provider.apiKeyEnv ? "" : "留空保持原值（不是密钥值）"; envInput.disabled = app.original.readOnly;
-        envInput.addEventListener("input", function () { provider.apiKeyEnv = envInput.value; provider.apiKeyEnvTouched = true; refreshAction(); }); envField.appendChild(envInput);
-        envField.appendChild(createElement("p", "field-help", "只填写变量名；页面不会读取或显示 API Key 值。")); grid.appendChild(envField);
-        var extraField = createElement("div", "field wide"), extraId = "provider-" + index + "-extra-models"; extraField.appendChild(fieldLabel(extraId, "额外模型 extraModels"));
-        var extraInput = createElement("textarea"); extraInput.id = extraId; extraInput.spellcheck = false; extraInput.value = provider.extraModels.join("\n"); extraInput.placeholder = "一行一个，也可用逗号分隔"; extraInput.disabled = app.original.readOnly;
-        extraInput.addEventListener("input", function () { provider.extraModels = uniqueStrings(extraInput.value.split(/[\n,]+/)); refreshAction(); }); extraField.appendChild(extraInput); grid.appendChild(extraField);
-        body.appendChild(grid);
-        if (app.original.readOnly === false && app.original.providers.every(function (item) { return item.id !== provider.id; })) {
-          var actions = createElement("div", "inline-actions"); actions.style.marginTop = "12px";
-          var remove = createElement("button", "button danger small", "移除未保存 Provider"); remove.type = "button";
-          remove.addEventListener("click", function () { app.draft.providers = app.draft.providers.filter(function (item) { return item.id !== provider.id; }); if (app.draft.defaultProvider === provider.id) app.draft.defaultProvider = null; renderProvidersAndDefaults(); });
-          actions.appendChild(remove); body.appendChild(actions);
-        }
-        card.appendChild(body); container.appendChild(card);
-      });
-    }    function renderDefaultProvider() {
-      var select = document.getElementById("default-provider"); clear(select);
-      var none = createElement("option", "", "未设置"); none.value = ""; select.appendChild(none);
-      app.draft.providers.forEach(function (provider) { var option = createElement("option", "", provider.label || provider.id); option.value = provider.id; select.appendChild(option); });
-      select.value = app.draft.defaultProvider || ""; if (!app.draft.providers.some(function (provider) { return provider.id === select.value; })) select.value = ""; select.disabled = app.original.readOnly;
+    function normalizeRoute(value) {
+      if (value === "official") return { kind: "official" };
+      if (isObject(value)) {
+        if (value.official === true || value.kind === "official" || value.type === "official") return { kind: "official" };
+        var provider = normalizeText(value.provider), model = normalizeText(value.model);
+        if (provider && model) return { kind: "target", provider: provider, model: model, effort: normalizeText(value.effort) };
+        if (typeof value.value === "string") return normalizeRoute(value.value);
+      }
+      if (typeof value === "string") {
+        if (value === "official") return { kind: "official" };
+        var parsed = parseProviderTarget(value);
+        if (parsed) return { kind: "target", provider: parsed.provider, model: parsed.model, effort: "" };
+        return { kind: "legacy", raw: value };
+      }
+      return { kind: "legacy", raw: "" };
     }
-    function renderRoutes() {
-      var container = document.getElementById("route-list"); clear(container); var aliases = Object.keys(app.draft.routes);
-      if (!aliases.length) container.appendChild(createElement("div", "empty", "当前没有显式路由。"));
-      else aliases.sort().forEach(function (alias) {
-        var row = createElement("div", "route-card"), line = createElement("div", "route-row");
-        appendText(line, "div", "", alias); appendText(line, "div", "route-arrow", "→"); appendText(line, "div", "route-target", app.draft.routes[alias]);
-        var remove = createElement("button", "button danger small", "删除路由"); remove.type = "button"; remove.disabled = app.original.readOnly; remove.setAttribute("aria-label", "删除路由 " + alias);
-        remove.addEventListener("click", function () { delete app.draft.routes[alias]; renderRoutes(); refreshAction(); }); line.appendChild(remove); row.appendChild(line); container.appendChild(row);
-      });
-      var datalist = document.getElementById("route-target-options"); clear(datalist); var values = ["official"];
-      app.draft.providers.forEach(function (provider) { values.push(provider.id); }); Object.keys(app.draft.routes).forEach(function (alias) { values.push(app.draft.routes[alias]); });
-      new Set(values).forEach(function (value) { var option = createElement("option"); option.value = value; datalist.appendChild(option); });
+    function normalizeRoutes(value) {
+      var result = {}, source = isObject(value) ? value : {};
+      Object.keys(source).forEach(function (alias) { if (alias.trim()) result[alias] = normalizeRoute(source[alias]); });
+      return result;
     }
-    function renderProvidersAndDefaults() { renderProviderList(); renderDefaultProvider(); renderRoutes(); refreshAction(); notifySizeSoon(); }
-    function renderEditor() {
-      document.getElementById("waiting-panel").hidden = true; document.getElementById("settings-panel").hidden = false;
-      renderMode(); renderSummary(); renderModels(); renderProvidersAndDefaults();
-      var maxButton = document.getElementById("max-effort-button"); maxButton.disabled = app.original.readOnly || !app.draft.models.length;
-      ["new-provider-id", "new-provider-label", "new-provider-base-url", "new-provider-preset", "new-provider-api-key-env", "new-provider-extra-models", "new-route-alias", "new-route-target", "add-provider-button", "add-route-button"].forEach(function (elementId) { document.getElementById(elementId).disabled = app.original.readOnly; });
-      document.getElementById("routing-mode").value = app.draft.routingMode;
-      refreshAction(); notifySizeSoon();
+    function normalizeAccountSync(value) {
+      var item = isObject(value) ? value : {};
+      return { available: item.available === true, revision: normalizeText(item.revision), status: normalizeText(item.status), reason: normalizeText(item.reason), retryBlocked: item.retryBlocked === true, outcomeUnknown: item.outcomeUnknown === true, publicationPending: item.publicationPending === true };
     }
-    function applyState(state, reason) {
-      var normalized = normalizeState(state); app.original = normalizeState(state); app.draft = copy(normalized); app.draft.switchMode = app.original.configuredMode; app.draft.maxEffortRequested = false;
-      renderEditor(); if (reason === "bridge") document.getElementById("waiting-detail").textContent = "已收到宿主 state。";
+    function normalizeState(value) {
+      if (!isObject(value)) return null;
+      return {
+        revision: normalizeText(value.revision),
+        configuredMode: normalizeConfiguredMode(value.configuredMode),
+        parameterPriority: normalizeParameterPriority(value.parameterPriority),
+        readOnly: value.readOnly === true,
+        accountSync: normalizeAccountSync(value.accountSync),
+        providers: normalizeProviders(value.providers),
+        routes: normalizeRoutes(value.routes),
+        officialModels: uniqueStrings(value.officialModels),
+        note: normalizeText(value.note)
+      };
     }
-    function currentPatch() { return app.original && app.draft ? makePatch(app.original, app.draft) : {}; }
-    function currentRequest() { return { action: "apply", expectedRevision: app.original ? app.original.revision : null, patch: currentPatch() }; }
-    function refreshAction() {
-      var button = document.getElementById("apply-button"), title = document.getElementById("action-title"), detail = document.getElementById("action-detail");
-      if (!app.original || !app.draft) { button.textContent = "等待配置"; button.disabled = true; title.textContent = "等待模型配置"; detail.textContent = "收到有效 state 后才会显示可保存的操作。"; return; }
-      var patch = currentPatch(), hasPatch = Object.keys(patch).length > 0; var bridgeMode = app.bridgeReady && app.bridge && typeof app.bridge.callTool === "function";
-      button.textContent = app.original.readOnly ? "宿主只读" : bridgeMode ? (app.busy ? "应用中…" : "保存并应用") : "生成离线指令";
-      button.disabled = app.original.readOnly || app.busy || !hasPatch;
-      title.textContent = app.original.readOnly ? "宿主只读" : hasPatch ? (bridgeMode ? "通过宿主桥应用" : "离线产物模式") : "尚无修改";
-      detail.textContent = app.original.readOnly ? "当前 state 标记 readOnly，不能提交修改。" : hasPatch ? (bridgeMode ? "会调用 window.wb3pBridge.callTool(request)。" : "尚未应用；生成后复制到原会话发送。") : "修改模式、参数优先级、模型、Provider 或路由后即可提交。";
+    function hasStateShape(value) {
+      if (!isObject(value) || typeof value.revision !== "string") return false;
+      var providers = value.providers, routes = value.routes;
+      return (Array.isArray(providers) || isObject(providers)) && isObject(routes);
     }
-    function revealOffline(request) {
-      var panel = document.getElementById("offline-panel"), output = document.getElementById("offline-output"); panel.hidden = false;
-      output.value = "请调用 models_settings 工具应用以下设置：\n" + JSON.stringify(request, null, 2);
-      document.getElementById("offline-status").textContent = "尚未应用：请复制下方内容到原会话发送；复制成功也不代表宿主已写入。"; notifySizeSoon();
+    function extractState(value) {
+      if (!isObject(value)) return null;
+      if (hasStateShape(value)) return normalizeState(value);
+      if (value.state) return extractState(value.state);
+      if (value.structuredContent) return extractState(value.structuredContent);
+      if (value.result && value.result.structuredContent) return extractState(value.result.structuredContent);
+      if (value.params && value.params.structuredContent) return extractState(value.params.structuredContent);
+      return null;
     }
-    function generateOffline() { var request = currentRequest(); if (!Object.keys(request.patch).length) { setStatus("info", "没有需要提交的修改。"); return; } revealOffline(request); setStatus("info", "已生成离线指令，但尚未应用。请复制到原会话发送。"); }
-    async function copyOffline() {
-      var output = document.getElementById("offline-output"); if (!output.value) { setStatus("info", "请先生成离线指令。"); return; }
-      try { if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") throw new Error("clipboard unavailable"); await navigator.clipboard.writeText(output.value); }
-      catch (error) { output.focus(); output.select(); if (typeof document.execCommand !== "function" || document.execCommand("copy") !== true) { setStatus("error", "复制失败；请手动选择文本复制。设置仍未应用。"); return; } }
-      document.getElementById("offline-status").textContent = "已复制，但尚未应用；请发送到原会话后才可能生效。"; setStatus("info", "已复制离线指令。尚未应用，请发送到原会话。");
+    function providerMap(state) {
+      var map = {};
+      if (state && Array.isArray(state.providers)) state.providers.forEach(function (provider) { map[provider.id] = provider; });
+      return map;
     }
-    function downloadDraft() {
-      var output = document.getElementById("offline-output"); if (!output.value) { setStatus("info", "请先生成离线指令。"); return; }
-      var request = currentRequest(), blob = new Blob([JSON.stringify(request, null, 2) + "\n"], { type: "application/json" }), url = URL.createObjectURL(blob), link = document.createElement("a");
-      link.href = url; link.download = "wb3p-models-settings-draft.json"; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-      setStatus("info", "JSON 草案已下载；文件不含密钥，且尚未应用。");
+    function serializeCapability(model) {
+      var item = model || {};
+      return {
+        maxInputTokens: normalizePositiveInt(item.maxInputTokens),
+        maxOutputTokens: normalizePositiveInt(item.maxOutputTokens),
+        supportsTools: normalizeBoolean(item.supportsTools),
+        supportsImages: normalizeBoolean(item.supportsImages),
+        supportedEfforts: item.supportedEfforts === null ? null : uniqueStrings(item.supportedEfforts),
+        canDisableThinking: normalizeBoolean(item.canDisableThinking),
+        defaultEffort: normalizeOptionalText(item.defaultEffort),
+        protocolCompat: item.protocolCompat === null ? null : normalizeProtocolCompat(item.protocolCompat)
+      };
     }
-    async function applyViaBridge() {
-      var request = currentRequest(); if (!Object.keys(request.patch).length) { setStatus("info", "没有需要提交的修改。"); return; }
-      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { generateOffline(); return; }
-      var token = { id: ++app.nextLocalId, notificationState: null, resolved: false }; app.pendingApply = token; setBusy(true); hideStatus();
-      try {
-        var result = await app.bridge.callTool(request); token.resolved = true;
-        var explicitError = isObject(result) && (result.ok === false || result.isError === true || result.error);
-        if (explicitError) throw new Error("宿主返回错误");
-        if (result && result.committed === true && result.stateUnavailable === true) {
-          app.original = null; app.draft = null;
-          setStatus("error", "设置已提交，但读取回执失败；请重新打开设置，不能自动重试。备份仍保留。");
+    function serializeModels(models) {
+      var result = {};
+      Object.keys(models || {}).sort().forEach(function (id) { if (id.trim()) result[id] = serializeCapability(models[id]); });
+      return result;
+    }
+    function routeComparable(route) {
+      if (!route) return null;
+      if (route.kind === "official") return "official";
+      if (route.kind === "target") return { provider: route.provider, model: route.model, effort: normalizeText(route.effort) };
+      return { legacy: normalizeText(route.raw) };
+    }
+    function routeTargetPatch(route) {
+      if (!route || route.kind === "official") return "official";
+      if (route.kind === "target") {
+        var target = { provider: route.provider, model: route.model };
+        if (normalizeText(route.effort)) target.effort = normalizeText(route.effort);
+        return target;
+      }
+      return normalizeText(route.raw);
+    }
+    function makePatch(original, draft) {
+      var patch = {}, providerPatch = {}, beforeProviders = providerMap(original), afterProviders = providerMap(draft);
+      if (draft.configuredMode && draft.configuredMode !== original.configuredMode) patch.switchMode = draft.configuredMode;
+      if (draft.parameterPriority && draft.parameterPriority !== original.parameterPriority) patch.parameterPriority = draft.parameterPriority;
+      Object.keys(afterProviders).forEach(function (id) {
+        var before = beforeProviders[id], after = afterProviders[id], fields = {};
+        if (!before) {
+          fields.protocol = after.protocol;
+          fields.label = after.label;
+          fields.baseUrl = after.baseUrl;
+          fields.extraModels = uniqueStrings(after.extraModels);
+          fields.models = serializeModels(after.models);
+          if (after.apiKeyEnv) fields.apiKeyEnv = after.apiKeyEnv;
+          if (after.reuseCredential) fields.reuseCredential = true;
+          providerPatch[id] = fields;
           return;
         }
-        var next = extractState(result);
-        if (!next) throw new Error("宿主未返回可识别的 state");
-        if (!app.original || JSON.stringify(next) !== JSON.stringify(app.original)) applyState(next, "bridge");
-        setStatus("info", "设置已写入，宿主已返回新 state。请刷新模型目录并重新选择模型；尚未验证实际请求，当前沙箱不会自动同步新会话。");
-      } catch (error) {
-        var message = error && error.message ? error.message : String(error);
-        setStatus("error", "设置应用未获确认。宿主桥调用失败：" + message + "。请重新读取状态后核对，不能自动重试。"); revealOffline(request);
-      } finally { if (app.pendingApply && app.pendingApply.id === token.id) app.pendingApply = null; setBusy(false); }
+        if (before.protocol !== after.protocol) fields.protocol = after.protocol;
+        if (before.label !== after.label) fields.label = after.label;
+        if (before.baseUrl !== after.baseUrl) fields.baseUrl = after.baseUrl;
+        if (JSON.stringify(before.extraModels) !== JSON.stringify(after.extraModels)) fields.extraModels = uniqueStrings(after.extraModels);
+        if (after.apiKeyEnvTouched && before.apiKeyEnv !== after.apiKeyEnv && after.apiKeyEnv) fields.apiKeyEnv = after.apiKeyEnv;
+        if (after.reuseCredential && before.baseUrl !== after.baseUrl) fields.reuseCredential = true;
+        if (JSON.stringify(serializeModels(before.models)) !== JSON.stringify(serializeModels(after.models))) fields.models = serializeModels(after.models);
+        if (Object.keys(fields).length) providerPatch[id] = fields;
+      });
+      Object.keys(beforeProviders).forEach(function (id) { if (!afterProviders[id]) providerPatch[id] = null; });
+      if (Object.keys(providerPatch).length) patch.providers = providerPatch;
+      var beforeRoutes = original && original.routes ? original.routes : {}, afterRoutes = draft && draft.routes ? draft.routes : {};
+      var routeChanged = Object.keys(beforeRoutes).some(function (alias) { return !afterRoutes[alias] || JSON.stringify(routeComparable(beforeRoutes[alias])) !== JSON.stringify(routeComparable(afterRoutes[alias])); }) ||
+        Object.keys(afterRoutes).some(function (alias) { return !beforeRoutes[alias] || JSON.stringify(routeComparable(beforeRoutes[alias])) !== JSON.stringify(routeComparable(afterRoutes[alias])); });
+      if (routeChanged) {
+        var routes = {};
+        Object.keys(beforeRoutes).forEach(function (alias) { routes[alias] = null; });
+        Object.keys(afterRoutes).forEach(function (alias) { routes[alias] = routeTargetPatch(afterRoutes[alias]); });
+        patch.routes = routes;
+      }
+      return patch;
     }
-    function onBridgeNotification(payload) {
-      var next = extractState(payload); if (!next) return;
-      if (app.bridge && typeof app.bridge.callTool === "function") app.bridgeReady = true;
-      if (app.pendingApply) return;
-      applyState(next, "bridge"); setConnection("online", "宿主桥已连接", "已通过 ui/notifications/tool-result 收到模型配置。");
+    function createApplyRequest(original, draft) {
+      return { action: "apply", scope: draft && draft.scope === "session" ? "session" : "account", expectedRevision: original && original.revision ? original.revision : null, patch: makePatch(original, draft) };
+    }
+    function effortOptionValues(model) {
+      var values = [], seen = Object.create(null), supported = model && Array.isArray(model.supportedEfforts) ? model.supportedEfforts : [];
+      function add(value) { var text = normalizeText(value); if (text && !seen[text]) { seen[text] = true; values.push(text); } }
+      add(model && model.defaultEffort);
+      supported.slice().sort(function (a, b) {
+        var ai = EFFORT_ORDER.indexOf(a), bi = EFFORT_ORDER.indexOf(b);
+        if (ai < 0 && bi < 0) return a.localeCompare(b);
+        if (ai < 0) return 1;
+        if (bi < 0) return -1;
+        return ai - bi;
+      }).forEach(add);
+      if (model && model.canDisableThinking === true) { add("off"); if (!supported.length) add("on"); }
+      return values;
+    }
+    function hasCommitReceipt(result, scope) {
+      if (!isObject(result) || result.committed !== true) return false;
+      var sessionCommitted = result.session === true || result.sessionCommitted === true;
+      var accountCommitted = result.accountCommitted === true;
+      if (scope === "account") return accountCommitted;
+      if (scope === "session") return sessionCommitted;
+      return sessionCommitted || accountCommitted;
+    }
+    function confirmationTypesFromResult(result) {
+      if (!isObject(result) || result.confirmationRequired !== true || !Array.isArray(result.confirmationTypes)) return null;
+      var types = result.confirmationTypes.slice();
+      return types.length > 0 && types.every(function (type) { return typeof type === "string"; }) ? types : null;
+    }
+    function withConfirmedConfirmationTypes(request, types) {
+      var outgoing = copy(request);
+      outgoing.confirmedConfirmationTypes = types.slice();
+      return outgoing;
+    }
+    function classifyApplyResult(result, scope) {
+      if (!isObject(result)) return { kind: "unconfirmed", reason: "invalid-result" };
+      if (result.confirmationRequired === true) {
+        var types = confirmationTypesFromResult(result);
+        return types ? { kind: "confirmation-required", confirmationTypes: types } : { kind: "confirmation-invalid" };
+      }
+      if (result.outcomeUnknown === true) return { kind: "publication-blocked", reason: "outcomeUnknown" };
+      if (result.publicationPending === true) return { kind: "publication-blocked", reason: "publicationPending" };
+      if (result.ok === false || result.isError === true || result.error) return { kind: "error" };
+      if (result.accountCommitted === true && (result.localSyncPending === true || result.partial === true || result.stateUnavailable === true)) {
+        return { kind: "account-unsynced", reason: result.stateUnavailable === true ? "accountStateUnavailable" : result.localSyncPending === true ? "localSyncPending" : "partial" };
+      }
+      if (!hasCommitReceipt(result, scope)) return { kind: "unconfirmed" };
+      if (result.stateUnavailable === true) return { kind: "publication-blocked", reason: "stateUnavailable" };
+      var state = extractState(result);
+      return state ? { kind: "committed", state: state } : { kind: "unconfirmed", reason: "state-missing" };
+    }
+    function isAllowedWorkBuddyUrl(value) {
+      if (typeof value !== "string" || !value) return false;
+      try {
+        var parsed = new URL(value);
+        return parsed.origin === ALLOWED_WORKBUDDY_ORIGIN && !parsed.username && !parsed.password;
+      } catch (error) { return false; }
+    }
+    function createAccountInstruction(action) {
+      if (["connect", "finish-connect", "status"].indexOf(action) < 0) throw new Error("invalid account tool action");
+      var lines = ["请在原会话调用 models_settings 工具；尚未执行。", JSON.stringify({ action: action }, null, 2), "复制成功不代表工具已执行。"];
+      if (action === "connect") lines.push("请在 " + ALLOWED_WORKBUDDY_ORIGIN + " 完成官方授权；授权完成后调用 finish-connect，再调用 status。");
+      else if (action === "finish-connect") lines.push("授权完成后调用此工具，再调用 status 核对账号同步状态。");
+      else lines.push("status 必须返回完整 state；动作回执 ok:true 不能当作完整 state。");
+      return lines.join("\n");
+    }
+    function createOfflineInstruction(request) {
+      if (request && (request.action === "connect" || request.action === "finish-connect" || (request.action === "status" && !request.patch))) return createAccountInstruction(request.action);
+      return "请在原会话调用 models_settings 工具应用以下设置；尚未应用。\n" + "global draft（全局草稿）\n" + "scope=" + request.scope + "\n" + "expectedRevision=" + request.expectedRevision + "\n" + JSON.stringify(request, null, 2);
+    }
+    function discoverRequest(providerId) { return { action: "discover", providerId: providerId }; }
+    function probeRequest(providerId, model) { return { action: "probe", providerId: providerId, model: model, allowBillable: true }; }
+    function importedTargets(state) {
+      var targets = [];
+      (state && state.providers ? state.providers : []).forEach(function (provider) {
+        Object.keys(provider.models || {}).sort().forEach(function (model) {
+          if (provider.protocol && provider.nativeSessionSupported === true) targets.push({ provider: provider.id, model: model, target: provider.id + ":" + model, capability: provider.models[model] });
+        });
+      });
+      return targets;
+    }
+    function findCapability(state, providerId, modelId) {
+      var provider = providerMap(state)[providerId];
+      return provider && provider.models ? provider.models[modelId] || null : null;
+    }
+    function targetFromSelect(value) {
+      var parsed = parseProviderTarget(value);
+      return parsed ? { provider: parsed.provider, model: parsed.model } : null;
+    }
+    function statusClasses(node, kind) { node.className = "state-note" + (kind === "warn" ? " warn" : ""); }
+    function setStatus(kind, message) {
+      var node = document.getElementById("operation-status");
+      node.className = "notice" + (kind === "error" ? " error" : kind === "info" ? " info" : "");
+      node.textContent = message; node.hidden = false;
+    }
+    function hideStatus() { document.getElementById("operation-status").hidden = true; }
+    function setConnection(kind, title, detail) {
+      document.getElementById("connection").className = "connection is-" + kind;
+      document.getElementById("connection-title").textContent = title;
+      document.getElementById("connection-detail").textContent = detail;
     }
     function notifySizeSoon() {
       window.requestAnimationFrame(function () {
         if (app.bridgeReady && app.bridge && typeof app.bridge.notifySize === "function") { try { app.bridge.notifySize(); } catch (error) { /* best effort */ } }
       });
-    }    async function connectBridge() {
+    }
+    function setBusy(value) { app.busy = value; refreshAction(); refreshOperationControls(); }
+    function selectedScope() { var session = document.getElementById("scope-session"); return app.draft && app.draft.scope === "session" && session && session.checked ? "session" : "account"; }
+    function accountSyncUsable() { return !!(app.original && app.original.accountSync && app.original.accountSync.available === true && app.original.accountSync.retryBlocked !== true && app.original.accountSync.outcomeUnknown !== true && app.original.accountSync.publicationPending !== true); }
+    function hasPatch() { return !!app.original && !!app.draft && Object.keys(makePatch(app.original, app.draft)).length > 0; }
+    function publicationReasonFromAccountSync(sync) {
+      if (!sync) return null;
+      if (sync.publicationPending === true) return "publicationPending";
+      if (sync.outcomeUnknown === true) return "outcomeUnknown";
+      return sync.retryBlocked === true ? "outcomeUnknown" : null;
+    }    function publicationStatusResolved(state) {
+      var sync = state && state.accountSync;
+      if (!sync || sync.available !== true || sync.retryBlocked === true || sync.outcomeUnknown === true || sync.publicationPending === true) return false;
+      var status = normalizeText(sync.status).toLowerCase();
+      if (!status || status === "publication-unresolved" || status === "sync-error" || status === "not-connected") return false;
+      return status.indexOf("pending") < 0;
+    }
+    function publicationBlockMessage(block) {
+      var reason = block && block.reason ? block.reason : "outcomeUnknown", message;
+      if (reason === "publicationPending") message = "账号发布仍在处理中。已阻止自动发布和重复发布；请先读取 status，直到返回完整 state。";
+      else if (reason === "localSyncPending" || reason === "accountStateUnavailable") message = "账号已保存，当前会话未同步；不要重发。请先读取 status，直到返回完整 state。";
+      else if (reason === "partial") message = "账号已保存，但发布结果为 partial；当前会话未同步时不要重发。请先读取 status，直到返回完整 state。";
+      else if (reason === "stateUnavailable") message = "本次提交已发生，但未获得可读完整 state。已阻止自动或重复发布；请先读取 status。";
+      else message = "发布结果未知。已阻止自动发布和重复发布；请先读取 status，直到返回完整 state。";
+      var sync = block && block.accountSync;
+      if (sync) message += " 最新 status=" + (normalizeText(sync.status) || "未知") + "；available=" + (sync.available === true) + "；retryBlocked=" + (sync.retryBlocked === true) + "。";
+      return message;
+    }
+    function refreshOperationControls() {
+      var confirmButton = document.getElementById("confirm-apply-button"), cancelButton = document.getElementById("cancel-confirmation-button");
+      var statusButton = document.getElementById("status-recheck-button"), connectButton = document.getElementById("account-connect-button"), finishButton = document.getElementById("account-finish-button");
+      var readOnly = !!(app.original && app.original.readOnly);
+      if (confirmButton) confirmButton.disabled = app.busy || readOnly || !app.pendingConfirmation;
+      if (cancelButton) cancelButton.disabled = app.busy || !app.pendingConfirmation;
+      if (statusButton) statusButton.disabled = app.busy || !app.publicationBlocked;
+      if (connectButton) connectButton.disabled = app.busy || app.bridgeConnecting;
+      if (finishButton) { finishButton.disabled = app.busy || app.bridgeConnecting || !app.accountAuthorizationUrl; finishButton.hidden = !app.accountAuthorizationUrl; }
+    }
+    function refreshAction() {
+      var button = document.getElementById("apply-button"), title = document.getElementById("action-title"), detail = document.getElementById("action-detail");
+      if (!app.original || !app.draft) { button.textContent = "等待配置"; button.disabled = true; title.textContent = "等待模型配置"; detail.textContent = "收到有效 state 后才会显示可保存的操作。"; refreshOperationControls(); return; }
+      if (app.publicationBlocked) {
+        button.textContent = "已阻止重复发布"; button.disabled = true; title.textContent = "等待 status 明确"; detail.textContent = publicationBlockMessage(app.publicationBlocked); refreshOperationControls(); return;
+      }
+      if (app.pendingConfirmation) {
+        button.textContent = "等待明确确认"; button.disabled = true; title.textContent = "需要用户确认"; detail.textContent = "请查看上方确认控件；只有点击确认并重试后才会带 confirmedConfirmationTypes 重发。"; refreshOperationControls(); return;
+      }
+      var patch = makePatch(app.original, app.draft), changed = Object.keys(patch).length > 0;
+      var bridgeMode = app.bridgeReady && app.bridge && typeof app.bridge.callTool === "function", scope = selectedScope();
+      var accountUnavailable = scope === "account" && !accountSyncUsable();
+      button.textContent = app.original.readOnly ? "宿主只读" : accountUnavailable ? "生成全局草稿" : bridgeMode ? (app.busy ? "应用中…" : "保存并应用") : "生成离线指令";
+      var disabled = app.original.readOnly || app.busy || !changed;
+
+      button.disabled = disabled;
+      title.textContent = app.original.readOnly ? "宿主只读" : !changed ? "尚无修改" : accountUnavailable ? "账号同步不可用" : bridgeMode ? "通过宿主桥应用" : "离线产物模式";
+      if (app.original.readOnly) detail.textContent = "当前 state 标记 readOnly，不能提交修改。";
+      else if (!changed) detail.textContent = "修改供应商、模型能力或路由后即可提交。";
+      else if (accountUnavailable) detail.textContent = "账号同步不可用；请使用上方连接 WorkBuddy 账号按钮。仍可生成 global draft（全局草稿），但它仍未应用，也不会伪装成本地成功；或在高级选项中显式选择 scope=session。";
+      else if (bridgeMode) detail.textContent = "将按 scope=" + scope + " 调用 window.wb3pBridge.callTool(request)。";
+      else detail.textContent = "尚未应用；生成后复制到原会话发送。账号同步不可用时不会显示本地成功。";
+      refreshOperationControls();
+    }
+    function renderScope() {
+      document.getElementById("model-source").value=app.draft.configuredMode||app.original.configuredMode||"official";
+      document.getElementById("parameter-priority").value=app.draft.parameterPriority||app.original.parameterPriority||"3p";
+      var account = document.getElementById("scope-account"), session = document.getElementById("scope-session"), status = document.getElementById("account-sync-status");
+      app.draft.scope = app.draft.scope === "session" ? "session" : "account";
+      account.checked = app.draft.scope === "account"; session.checked = app.draft.scope === "session";
+      account.disabled = app.original.readOnly; session.disabled = app.original.readOnly;
+      statusClasses(status, app.original.accountSync.available ? "" : "warn");
+      if (app.original.accountSync.available) status.textContent = "账号同步可用" + (app.original.accountSync.revision ? "；账号 revision=" + app.original.accountSync.revision : "") + (app.original.accountSync.status ? "；状态=" + app.original.accountSync.status : "") + (app.original.accountSync.retryBlocked ? "；retryBlocked=true" : "") + "。";
+      else status.textContent = "账号同步不可用" + (app.original.accountSync.reason ? "：" + app.original.accountSync.reason : "；state.accountSync.available 缺失或为 false。") + " 请先连接 WorkBuddy 账号。页面不会自动改成本地成功，也不会把不可用状态伪装成本地保存成功。";
+      renderAccountConnection(); refreshAction();
+    }
+    function renderProviderProtocol(select, provider) {
+      clear(select);
+      select.textContent = "OpenAI 兼容 Chat Completions";
+    }
+    function fieldLabel(forId, textValue) { var label = createElement("label", "field-label", textValue); label.htmlFor = forId; return label; }
+    function textField(parent, id, label, value, placeholder, onInput) {
+      var field = createElement("div", "field"); field.appendChild(fieldLabel(id, label));
+      var input = createElement("input"); input.id = id; input.autocomplete = "off"; input.value = value || ""; input.placeholder = placeholder || ""; input.disabled = app.original.readOnly;
+      input.addEventListener("input", function () { onInput(input.value); refreshAction(); }); field.appendChild(input); parent.appendChild(field); return input;
+    }
+    function numberField(parent, id, label, value, onInput) {
+      var field = createElement("div", "field"); field.appendChild(fieldLabel(id, label));
+      var input = createElement("input"); input.id = id; input.type = "number"; input.min = "1"; input.inputMode = "numeric"; input.value = value === null || value === undefined ? "" : String(value); input.placeholder = "未知（不会自动填写）"; input.disabled = app.original.readOnly;
+      input.addEventListener("input", function () { onInput(normalizePositiveInt(input.value)); refreshAction(); }); field.appendChild(input); field.appendChild(createElement("p", "field-help", "留空表示未知，不自动猜测数字。")); parent.appendChild(field); return input;
+    }
+    function booleanField(parent, id, label, value, onInput) {
+      var wrapper = createElement("label", "check-line"); wrapper.htmlFor = id;
+      var input = createElement("input"); input.id = id; input.type = "checkbox"; input.checked = value === true; input.indeterminate = value === null; input.disabled = app.original.readOnly;
+      input.addEventListener("change", function () { onInput(input.checked); input.indeterminate = false; refreshAction(); });
+      wrapper.appendChild(input); wrapper.appendChild(createElement("span", "", label + (value === null ? "（未知）" : ""))); parent.appendChild(wrapper); return input;
+    }
+    function renderCapability(provider, modelId) {
+      var model = provider.models[modelId], card = createElement("div", "model-card"), header = createElement("header"), title = createElement("div");
+      title.appendChild(createElement("h3", "", modelId));
+      title.appendChild(createElement("p", "subtle", "能力由发现结果或你的声明决定；空白/未知值不会自动猜测。"));
+      header.appendChild(title);
+      var remove = createElement("button", "button danger small", "移除模型草稿"); remove.type = "button"; remove.disabled = app.original.readOnly;
+      remove.addEventListener("click", function () { delete provider.models[modelId]; provider.extraModels = provider.extraModels.filter(function (id) { return id !== modelId; }); renderProviders(); setStatus("info", "模型已从草稿移除，尚未保存。"); });
+      header.appendChild(remove); card.appendChild(header);
+      var body = createElement("div", "card-body"), grid = createElement("div", "field-grid");
+      numberField(grid, "model-" + provider.id + "-" + modelId + "-input", "ctx / maxInputTokens", model.maxInputTokens, function (v) { model.maxInputTokens = v; model.touched.maxInputTokens = true; });
+      numberField(grid, "model-" + provider.id + "-" + modelId + "-output", "maxOutputTokens", model.maxOutputTokens, function (v) { model.maxOutputTokens = v; model.touched.maxOutputTokens = true; });
+      var tools = createElement("div", "field"); tools.appendChild(fieldLabel("model-" + provider.id + "-" + modelId + "-tools", "supportsTools")); booleanField(tools, "model-" + provider.id + "-" + modelId + "-tools", "支持工具调用", model.supportsTools, function (v) { model.supportsTools = v; model.touched.supportsTools = true; }); grid.appendChild(tools);
+      var images = createElement("div", "field"); images.appendChild(fieldLabel("model-" + provider.id + "-" + modelId + "-images", "supportsImages")); booleanField(images, "model-" + provider.id + "-" + modelId + "-images", "支持图片输入", model.supportsImages, function (v) { model.supportsImages = v; model.touched.supportsImages = true; }); grid.appendChild(images);
+      textField(grid, "model-" + provider.id + "-" + modelId + "-efforts", "reasoning supportedEfforts（逗号声明）", model.supportedEfforts === null ? "" : model.supportedEfforts.join(","), "未声明；逗号分隔", function (value) { model.supportedEfforts = splitList(value); model.touched.supportedEfforts = true; });
+      var disable = createElement("div", "field"); disable.appendChild(fieldLabel("model-" + provider.id + "-" + modelId + "-disable", "canDisableThinking")); booleanField(disable, "model-" + provider.id + "-" + modelId + "-disable", "可关闭思考", model.canDisableThinking, function (v) { model.canDisableThinking = v; model.touched.canDisableThinking = true; }); grid.appendChild(disable);
+      textField(grid, "model-" + provider.id + "-" + modelId + "-default", "defaultEffort", model.defaultEffort || "", "未声明", function (value) { model.defaultEffort = normalizeOptionalText(value); model.touched.defaultEffort = true; });
+      grid.appendChild(createElement("p","field-help","模型请求使用 OpenAI Chat Completions；不会进行协议转换。"));
+      body.appendChild(grid); card.appendChild(body); return card;
+    }
+    function renderProviderModels(provider) {
+      var container = createElement("div", "list"), ids = Object.keys(provider.models || {}).sort();
+      if (!ids.length) { container.appendChild(createElement("div", "empty", "暂无导入模型草稿。请先发现或手动添加 extraModels，然后导入。 ")); return container; }
+      ids.forEach(function (id) { container.appendChild(renderCapability(provider, id)); });
+      return container;
+    }
+    function renderDiscovery(provider) {
+      var box = createElement("div"), discovery = provider.discovery;
+      if (!discovery) { box.appendChild(createElement("p", "subtle", "尚未拉取模型列表。")); return box; }
+      if (discovery.error) { box.appendChild(createElement("p", "notice error", "发现失败：" + discovery.error)); return box; }
+      if (discovery.supported === false) { box.appendChild(createElement("p", "notice info", "该端点未声明模型列表能力；请使用额外模型 ID 手工导入，能力保持未知。")); return box; }
+      if (!discovery.models || !discovery.models.length) { box.appendChild(createElement("p", "subtle", "发现成功，但没有返回模型。")); return box; }
+      var list = createElement("div", "list"), selected = [];
+      discovery.models.forEach(function (item, index) {
+        var id = "discovery-" + provider.id + "-" + index, row = createElement("label", "check-line"); row.htmlFor = id;
+        var input = createElement("input"); input.type = "checkbox"; input.id = id; input.value = item.id; input.addEventListener("change", function () { if (input.checked) selected.push(item); else selected = selected.filter(function (value) { return value !== item; }); });
+        row.appendChild(input); row.appendChild(createElement("span", "", (item.label || item.id) + " · " + item.id + (item.ctx ? " · ctx=" + item.ctx : " · ctx 未知"))); list.appendChild(row);
+      });
+      var importButton = createElement("button", "button small", "导入所选（尚未保存）"); importButton.type = "button";
+      importButton.addEventListener("click", function () {
+        var changed = 0;
+        selected.forEach(function (item) {
+          if (!provider.models[item.id]) changed += 1;
+          provider.models[item.id] = normalizeCapability(item);
+          if (provider.extraModels.indexOf(item.id) < 0) provider.extraModels.push(item.id);
+        });
+        renderProviders(); setStatus("info", changed ? "已把所选模型加入草稿，尚未保存。" : "所选模型已在草稿中。");
+      });
+      var actions = createElement("div", "inline-actions"); actions.style.marginTop = "10px"; actions.appendChild(importButton); box.appendChild(list); box.appendChild(actions); return box;
+    }
+    function renderProviderCard(provider) {
+      var card = createElement("div", "provider-card"), header = createElement("header"), title = createElement("div");
+      title.appendChild(createElement("h3", "", provider.label || provider.id));
+      title.appendChild(createElement("p", "subtle", "ID：" + provider.id + (provider.credential && provider.credential.configured ? " · 凭据状态：已配置（未显示值）" : "")));
+      var sessionTag = createElement("div", "tags"); sessionTag.appendChild(createElement("span", "tag " + (provider.nativeSessionSupported ? "ok" : "warn"), provider.nativeSessionSupported ? "Native 会话可映射" : "仅端点管理 / 不可作为 Native 会话映射")); title.appendChild(sessionTag);
+      var protocol = createElement("span","tag"); renderProviderProtocol(protocol, provider); header.appendChild(title); header.appendChild(protocol); card.appendChild(header);
+      var body = createElement("div", "card-body"), grid = createElement("div", "field-grid");
+      textField(grid, "provider-" + provider.id + "-label", "显示名称 label", provider.label, "供应商显示名", function (value) { provider.label = value; });
+      textField(grid, "provider-" + provider.id + "-base-url", "Base URL", provider.baseUrl, "https://api.example.com/v1", function (value) { provider.baseUrl = value; });
+      textField(grid, "provider-" + provider.id + "-api-key-env", "凭据环境变量名", provider.apiKeyEnv, "留空保持原值（不是密钥值）", function (value) { provider.apiKeyEnv = value.trim(); provider.apiKeyEnvTouched = true; });
+      textField(grid, "provider-" + provider.id + "-extra-models", "额外模型 ID（逗号或换行分隔）", provider.extraModels.join(","), "只登记 ID，能力仍未知", function (value) { provider.extraModels = splitList(value); });
+      var reuse = createElement("label", "check-line"); reuse.htmlFor = "provider-" + provider.id + "-reuse"; var reuseInput = createElement("input"); reuseInput.id = "provider-" + provider.id + "-reuse"; reuseInput.type = "checkbox"; reuseInput.checked = provider.reuseCredential === true; reuseInput.disabled = app.original.readOnly; reuseInput.addEventListener("change", function () { provider.reuseCredential = reuseInput.checked; refreshAction(); }); reuse.appendChild(reuseInput); reuse.appendChild(createElement("span", "", "修改 Base URL 时复用原凭据")); grid.appendChild(reuse);
+      body.appendChild(grid);
+      if (!provider.nativeSessionSupported) body.appendChild(createElement("p", "notice info", "Native 会话固定 ChatCompletions。该供应商仍可保存、发现、导入元数据和执行原生端点 probe，但不能成为 Native 会话映射" + (provider.hostProtocolReason ? "：" + provider.hostProtocolReason : "。") + " 页面不执行协议转换，也不虚构协议字段。"));
+      var actions = createElement("div", "inline-actions"); actions.style.marginTop = "12px";
+      var savedProvider = !!providerMap(app.original)[provider.id];
+      if (!savedProvider) body.appendChild(createElement("p", "notice info", "供应商尚未保存。发现与探针使用已保存 providerId，保存并收到回执后才能执行。"));
+      var discover = createElement("button", "button secondary small", "拉取支持的模型"); discover.type = "button"; discover.disabled = app.original.readOnly || !app.bridgeReady || !savedProvider; discover.addEventListener("click", function () { runDiscover(provider.id); }); actions.appendChild(discover);
+      var probeWrap = createElement("div", "inline-actions"), probe = createElement("input"); probe.id = "probe-" + provider.id; probe.autocomplete = "off"; probe.placeholder = "显式模型 ID"; probe.disabled = app.original.readOnly || !app.bridgeReady || !savedProvider; probeWrap.appendChild(probe);
+      var probeButton = createElement("button", "button secondary small", "测试该模型连通性"); probeButton.type = "button"; probeButton.disabled = app.original.readOnly || !app.bridgeReady || !savedProvider; probeButton.addEventListener("click", function () { runProbe(provider.id, probe.value.trim()); }); probeWrap.appendChild(probeButton); actions.appendChild(probeWrap); body.appendChild(actions);
+      body.appendChild(renderDiscovery(provider)); if (provider.probe) body.appendChild(createElement("p", provider.probe.ok ? "notice" : "notice error", provider.probe.message));
+      body.appendChild(renderProviderModels(provider)); card.appendChild(body); return card;
+    }
+    function renderProviders() {
+      var list = document.getElementById("provider-list"), workbench = document.getElementById("discovery-workbench");
+      clear(list); clear(workbench);
+      if (!app.draft.providers.length) list.appendChild(createElement("div", "empty", "当前没有供应商草稿。"));
+      app.draft.providers.forEach(function (provider) { list.appendChild(renderProviderCard(provider)); });
+      if (!app.draft.providers.length) workbench.appendChild(createElement("div", "empty", "尚无已保存供应商可发现。")); else workbench.appendChild(createElement("p", "subtle", "发现与探针按钮位于上方每个供应商卡片；它们使用 MCP App bridge，不发起页面 HTTP。"));
+      notifySizeSoon();
+    }
+    function renderRouteTargetOptions(select, current) {
+      clear(select);
+      var targets = importedTargets(app.draft), currentProvider = current && current.kind === "target" ? providerMap(app.draft)[current.provider] : null, currentUnsupported = !!(currentProvider && currentProvider.nativeSessionSupported !== true);
+      if (!targets.length) { var empty = createElement("option", "", "暂无可映射的已导入模型"); empty.value = ""; select.appendChild(empty); select.disabled = true; return; }
+      select.disabled = app.original.readOnly;
+      if (currentUnsupported) { var blocked = createElement("option", "", "当前目标不可作为 Native 会话映射"); blocked.value = "__unsupported__"; blocked.disabled = true; blocked.selected = true; select.appendChild(blocked); }
+      if (current && current.kind === "legacy") { var legacy = createElement("option", "", "旧格式（原样保留）"); legacy.value = "__legacy__"; select.appendChild(legacy); }
+      targets.forEach(function (target) { var option = createElement("option", "", target.target); option.value = target.target; select.appendChild(option); });
+      if (currentUnsupported) { var blocked = createElement("option", "", "当前目标不可作为 Native 会话映射"); blocked.value = "__unsupported__"; blocked.disabled = true; blocked.selected = true; select.appendChild(blocked); }
+      if (current && current.kind === "legacy") select.value = "__legacy__";
+      else if (current && current.kind === "target" && currentUnsupported) select.value = "__unsupported__";
+      else if (current && current.kind === "target") select.value = current.provider + ":" + current.model;
+      else select.value = targets[0].target;
+    }
+    function renderRouteCard(alias, route) {
+      var card = createElement("div", "route-card"), header = createElement("header"), title = createElement("div"); title.appendChild(createElement("h3", "", alias)); title.appendChild(createElement("p", "subtle", route.kind === "legacy" ? "旧字符串路由：未修改时原样保留。" : route.kind === "official" ? "恢复官方路由。" : "显式 provider:model 路由。")); header.appendChild(title);
+      var remove = createElement("button", "button danger small", "删除路由（提交 null）"); remove.type = "button"; remove.disabled = app.original.readOnly; remove.addEventListener("click", function () { delete app.draft.routes[alias]; renderRoutes(); setStatus("info", "删除已加入草稿，尚未保存。"); }); header.appendChild(remove); card.appendChild(header);
+      var routeProvider = route.kind === "target" ? providerMap(app.draft)[route.provider] : null;
+      if (route.kind === "target" && (!routeProvider || routeProvider.nativeSessionSupported !== true)) card.appendChild(createElement("p", "notice info", "该目标没有宿主会话映射支持" + (routeProvider && routeProvider.hostProtocolReason ? "：" + routeProvider.hostProtocolReason : "。") + " 不能作为 Native 会话路由；请选择其他目标或恢复官方。"));
+      var body = createElement("div", "route-row");
+      body.appendChild(appendText(createElement("div"), "div", "route-arrow", alias + " →"));
+      var targetSelect = createElement("select"); targetSelect.setAttribute("aria-label", "路由目标"); renderRouteTargetOptions(targetSelect, route);
+      var effortSelect = createElement("select"); effortSelect.setAttribute("aria-label", "思考档位");
+      function updateEffortOptions() {
+        clear(effortSelect); var opts = [""], capability = null;
+        if (route.kind === "target") capability = findCapability(app.draft, route.provider, route.model);
+        var values = capability ? effortOptionValues(capability) : [];
+        values.forEach(function (value) { if (opts.indexOf(value) < 0) opts.push(value); });
+        opts.forEach(function (value) { var option = createElement("option", "", value === "" ? "模型默认" : value); option.value = value; effortSelect.appendChild(option); });
+        effortSelect.value = route.kind === "target" && route.effort && opts.indexOf(route.effort) >= 0 ? route.effort : "";
+        effortSelect.disabled = app.original.readOnly || route.kind !== "target" || !capability || !routeProvider || routeProvider.nativeSessionSupported !== true;
+      }
+      targetSelect.addEventListener("change", function () {
+        if (targetSelect.value === "__legacy__") { route.kind = "legacy"; renderRoutes(); return; }
+        var parsed = targetFromSelect(targetSelect.value); if (!parsed) return;
+        app.draft.routes[alias] = { kind: "target", provider: parsed.provider, model: parsed.model, effort: route.kind === "target" ? route.effort || "" : "" };
+        renderRoutes(); refreshAction();
+      });
+      effortSelect.addEventListener("change", function () { if (route.kind === "target") { route.effort = effortSelect.value; refreshAction(); } });
+      updateEffortOptions(); body.appendChild(targetSelect); body.appendChild(effortSelect);
+      var restore = createElement("button", "button secondary small", "恢复官方"); restore.type = "button"; restore.disabled = app.original.readOnly; restore.addEventListener("click", function () { app.draft.routes[alias] = { kind: "official" }; renderRoutes(); setStatus("info", "已设为恢复官方，尚未保存。"); }); body.appendChild(restore); card.appendChild(body); return card;
+    }
+    function renderRoutes() {
+      var list = document.getElementById("route-list"), source = document.getElementById("route-source"), target = document.getElementById("route-target");
+      clear(list); clear(source); clear(target);
+      var official = document.getElementById("official-model-options"); clear(official); (app.draft.officialModels || []).forEach(function (name) { var option = createElement("option"); option.value = name; official.appendChild(option); });
+      var targets = importedTargets(app.draft);
+      if (!targets.length) { var empty = createElement("option", "", "暂无可映射的已导入模型"); empty.value = ""; target.appendChild(empty); target.disabled = true; } else { targets.forEach(function (item) { var option = createElement("option", "", item.target); option.value = item.target; target.appendChild(option); }); target.disabled = app.original.readOnly; }
+      var aliases = Object.keys(app.draft.routes || {}).sort();
+      if (!aliases.length) list.appendChild(createElement("div", "empty", "当前没有显式路由草稿。"));
+      aliases.forEach(function (alias) { list.appendChild(renderRouteCard(alias, app.draft.routes[alias])); });
+      notifySizeSoon();
+    }
+    function addProvider() {
+      if (!app.original || app.original.readOnly) return;
+      var id = document.getElementById("new-provider-id").value.trim(), protocol = "openai-chat", baseUrl = document.getElementById("new-provider-base-url").value.trim(), env = document.getElementById("new-provider-api-key-env").value.trim(), label = document.getElementById("new-provider-label").value.trim() || id;
+      if (!id || providerMap(app.draft)[id]) { setStatus("error", "Provider ID 为空或已存在。"); return; }
+      if (!baseUrl) { setStatus("error", "Base URL 不能为空。"); return; }
+      if (!env) { setStatus("error", "请填写凭据环境变量名，不要填写密钥值。"); return; }
+      var extra = splitList(document.getElementById("new-provider-extra-models").value), models = {};
+      extra.forEach(function (model) { models[model] = normalizeCapability({}); });
+      app.draft.providers.push({ id: id, protocol: protocol, label: label, baseUrl: baseUrl, apiKeyEnv: env, apiKeyEnvTouched: true, reuseCredential: false, extraModels: extra, credential: { configured: null, kind: "environment" }, nativeSessionSupported: false, hostProtocolReason: "尚未由宿主声明 Native 会话映射；保存后等待后端核验。", models: models, discovery: null, probe: null });
+      ["new-provider-id", "new-provider-protocol", "new-provider-label", "new-provider-base-url", "new-provider-api-key-env", "new-provider-extra-models"].forEach(function (elementId) { document.getElementById(elementId).value = ""; });
+      renderProviders(); setStatus("info", "供应商已加入草稿，尚未保存。");
+    }
+    function addRoute() {
+      if (!app.original || app.original.readOnly) return;
+      var alias = document.getElementById("route-source").value.trim(), targetValue = document.getElementById("route-target").value, parsed = targetFromSelect(targetValue);
+      if (!alias) { setStatus("error", "请输入官方模型名或路由别名。"); return; }
+      var targetProvider = parsed ? providerMap(app.draft)[parsed.provider] : null;
+      if (!parsed || !findCapability(app.draft, parsed.provider, parsed.model) || !targetProvider || targetProvider.nativeSessionSupported !== true) { setStatus("error", "路由目标必须是已导入且声明 Native 会话可映射的 provider:model。"); return; }
+      app.draft.routes[alias] = { kind: "target", provider: parsed.provider, model: parsed.model, effort: "" };
+      document.getElementById("route-source").value = ""; renderRoutes(); setStatus("info", "路由已加入草稿，尚未保存。");
+    }
+    async function runDiscover(providerId) {
+      if (!providerMap(app.original)[providerId]) { setStatus("error", "供应商尚未保存，不能发现模型。"); return; }
+      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { setStatus("error", "当前没有宿主桥，不能发现模型；页面不会改用 HTTP。"); return; }
+      setBusy(true);
+      try {
+        var result = await app.bridge.callTool(discoverRequest(providerId));
+        if (result.ok !== true) throw new Error(result.error || "发现失败");
+        var provider = providerMap(app.draft)[providerId]; if (!provider) throw new Error("Provider 不存在");
+        provider.discovery = { supported: result.supported !== false, models: Array.isArray(result.models) ? result.models : [], error: result.error || null };
+        renderProviders(); setStatus("info", "模型列表已返回；勾选后导入草稿，尚未保存。");
+      } catch (error) { setStatus("error", "发现失败：" + (error && error.message ? error.message : String(error)) + "。配置未修改。"); }
+      finally { setBusy(false); }
+    }
+    async function runProbe(providerId, model) {
+      if (!providerMap(app.original)[providerId]) { setStatus("error", "供应商尚未保存，不能执行探针。"); return; }
+      if (!model) { setStatus("error", "请输入要测试的显式模型 ID。"); return; }
+      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { setStatus("error", "当前没有宿主桥，不能执行连通测试；页面不会改用 HTTP。"); return; }
+      setBusy(true);
+      try {
+        var result = await app.bridge.callTool(probeRequest(providerId, model));
+        var provider = providerMap(app.draft)[providerId];
+        var ok = result.ok === true && result.completed === true && result.markerMatched === true;
+        if (provider) provider.probe = { ok: ok, message: ok ? "探针成功：只证明原生端点可达与标记匹配，不证明宿主协议支持；配置未修改。" : "探针未通过：" + (result.error ? (result.error.message || result.error.code || result.error) : "未完成或标记不匹配") + "；配置未修改。" };
+        renderProviders(); setStatus(ok ? "info" : "error", provider && provider.probe.message);
+      } catch (error) { setStatus("error", "探针失败：" + (error && error.message ? error.message : String(error)) + "。配置未修改。"); }
+      finally { setBusy(false); }
+    }
+    function revealInstruction(textValue, offlineStatus, request) {
+      var panel = document.getElementById("offline-panel"), output = document.getElementById("offline-output"), download = document.getElementById("download-offline-button");
+      app.offlineRequest = request ? copy(request) : null;
+      panel.hidden = false; output.textContent = textValue;
+      document.getElementById("offline-status").textContent = offlineStatus || "尚未执行；复制成功也不代表宿主已写入。";
+      if (download) download.disabled = !app.offlineRequest;
+      notifySizeSoon();
+    }
+    function revealOffline(request) {
+      revealInstruction(createOfflineInstruction(request), "尚未应用：请复制下方内容到原会话发送；复制成功也不代表宿主已写入。", request);
+    }
+    function revealAccountInstruction(action) {
+      revealInstruction(createAccountInstruction(action), "尚未执行：请复制下方内容到原会话发送；本页面没有伪造账号或 status 成功。", null);
+    }
+    function generateOffline() {
+      if (app.publicationBlocked) { setStatus("info", publicationBlockMessage(app.publicationBlocked)); return; }
+      if (!app.original || !app.draft) { setStatus("error", "尚未收到有效 state。"); return; }
+      var request = createApplyRequest(app.original, app.draft); if (!Object.keys(request.patch).length) { setStatus("info", "没有需要提交的修改。"); return; }
+      revealOffline(request); setStatus("info", "已生成 global draft（全局草稿），尚未应用。请复制到原会话发送。");
+    }
+    async function copyOffline() {
+      var output = document.getElementById("offline-output"); if (!output.textContent) { setStatus("info", "请先生成离线指令。"); return; }
+      try { if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") throw new Error("clipboard unavailable"); await navigator.clipboard.writeText(output.textContent); }
+      catch (error) { setStatus("error", "复制失败；请手动选择文本复制。设置仍未应用。"); return; }
+      document.getElementById("offline-status").textContent = "已复制，但尚未执行；请发送到原会话后才可能生效。"; setStatus("info", "已复制离线指令。尚未应用。");
+    }
+    function downloadDraft() {
+      if (!app.offlineRequest) { setStatus("info", "当前草稿是账户工具指令，不能下载为 apply JSON。"); return; }
+      var output = document.getElementById("offline-output"); if (!output.textContent) { setStatus("info", "请先生成离线指令。"); return; }
+      var blob = new Blob([JSON.stringify(app.offlineRequest, null, 2) + "\n"], { type: "application/json" }), url = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = url; link.download = "wb3p-models-settings-draft.json"; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+      setStatus("info", "JSON 草案已下载；不含密钥，且尚未应用。");
+    }
+    function hideConfirmation() {
+      app.pendingConfirmation = null;
+      var panel = document.getElementById("confirmation-panel"), typesNode = document.getElementById("confirmation-types");
+      if (panel) panel.hidden = true; if (typesNode) clear(typesNode);
+      refreshAction(); notifySizeSoon();
+    }
+    function renderConfirmation(request, types) {
+      app.pendingConfirmation = { request: copy(request), confirmationTypes: types.slice() };
+      var panel = document.getElementById("confirmation-panel"), typesNode = document.getElementById("confirmation-types");
+      if (typesNode) { clear(typesNode); types.forEach(function (type) { typesNode.appendChild(createElement("div", "", type)); }); }
+      if (panel) panel.hidden = false;
+      refreshAction(); notifySizeSoon();
+    }
+    function hidePublicationBlock() {
+      app.publicationBlocked = null;
+      var panel = document.getElementById("publication-block-panel"); if (panel) panel.hidden = true;
+      refreshAction(); notifySizeSoon();
+    }
+    function renderPublicationBlock(reason, request, accountSync) {
+      var prior = app.publicationBlocked || {};
+      app.publicationBlocked = { reason: reason || "outcomeUnknown", request: request ? copy(request) : prior.request ? copy(prior.request) : null, accountSync: accountSync ? copy(accountSync) : prior.accountSync ? copy(prior.accountSync) : null };
+      var panel = document.getElementById("publication-block-panel"), detail = document.getElementById("publication-block-detail");
+      if (detail) detail.textContent = publicationBlockMessage(app.publicationBlocked);
+      if (panel) panel.hidden = false;
+      refreshAction(); notifySizeSoon();
+    }
+    function renderAccountConnection() {
+      var status = document.getElementById("account-login-status"); if (!status) return;
+      clear(status); status.className = "state-note"; status.hidden = false;
+      if (app.accountAuthorizationUrl) {
+        status.className = "state-note warn";
+        status.appendChild(createElement("span", "", "官方授权链接已获取；授权完成前不会显示连接成功。"));
+        var link = createElement("a", "authorization-link", "打开 WorkBuddy 官方授权页面");
+        link.href = app.accountAuthorizationUrl; link.target = "_blank"; link.rel = "noopener noreferrer";
+        status.appendChild(link);
+      } else if (app.original && app.original.accountSync && app.original.accountSync.available) {
+        status.hidden = true;
+      } else {
+        status.textContent = "尚未连接 WorkBuddy 账号。连接按钮只接受 " + ALLOWED_WORKBUDDY_ORIGIN + " 的官方 authorizationUrl。";
+      }
+      refreshOperationControls();
+    }
+    async function connectAccount() {
+      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") {
+        revealAccountInstruction("connect");
+        setStatus("info", "未检测到宿主桥；已生成 connect 工具指令草稿，尚未执行，也未伪造成登录成功。");
+        return;
+      }
+      setBusy(true); hideStatus();
+      try {
+        var result = await app.bridge.callTool({ action: "connect" });
+        if (!isObject(result) || result.ok !== true) throw new Error(result && result.error ? (result.error.message || result.error.code || result.error) : "connect 未返回 ok:true");
+        if (!isAllowedWorkBuddyUrl(result.authorizationUrl)) throw new Error("authorizationUrl 不是允许的 " + ALLOWED_WORKBUDDY_ORIGIN + " 链接");
+        app.accountAuthorizationUrl = result.authorizationUrl;
+        renderAccountConnection();
+        setStatus("info", "已获取官方授权链接；请在官方页面完成授权，再点击“我已完成授权，检查连接”。当前尚未确认连接成功。");
+      } catch (error) { setStatus("error", "账号连接未完成：" + (error && error.message ? error.message : String(error)) + "。没有伪造成登录成功。"); }
+      finally { setBusy(false); }
+    }
+    async function finishAccountConnect() {
+      if (!app.accountAuthorizationUrl) { setStatus("error", "请先获取官方授权链接并完成授权。"); return; }
+      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") {
+        revealAccountInstruction("finish-connect");
+        setStatus("info", "未检测到宿主桥；已生成 finish-connect 工具指令草稿，尚未执行。");
+        return;
+      }
+      setBusy(true); hideStatus();
+      try {
+        var finishResult = await app.bridge.callTool({ action: "finish-connect" });
+        var statusResult = await app.bridge.callTool({ action: "status" });
+        var statusState = extractState(statusResult);
+        if (!statusState) throw new Error("status 未返回完整 state；ok:true 动作回执不能当作完整状态");
+        app.accountAuthorizationUrl = null;
+        applyStatePreservingDraft(statusState, "bridge", "account");
+        if (isObject(finishResult) && finishResult.loginPending === true) setStatus("info", "账号授权尚未完成；已重新读取 status，未显示连接成功。");
+        else if (isObject(finishResult) && finishResult.ok === true && finishResult.accountConnected === true) setStatus("info", "账号授权完成，已重新读取 status；accountCommitted=false 只表示授权成功，保存账号默认值仍需单独 apply。");
+        else setStatus("error", "finish-connect 未确认授权成功；已重新读取 status，请以 status 为准。");
+      } catch (error) { app.accountAuthorizationUrl = null; renderAccountConnection(); setStatus("error", "检查账号连接失败：" + (error && error.message ? error.message : String(error)) + "。未显示伪成功。"); }
+      finally { setBusy(false); }
+    }
+    async function resolvePublicationStatus() {
+      if (!app.publicationBlocked) { setStatus("info", "当前没有待解除的发布阻塞。"); return; }
+      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") {
+        revealAccountInstruction("status");
+        setStatus("info", "未检测到宿主桥；已生成 status 工具指令草稿，重复发布仍被阻止。");
+        return;
+      }
+      setBusy(true); hideStatus();
+      try {
+        var result = await app.bridge.callTool({ action: "status" });
+        if (isObject(result) && (result.ok === false || result.isError === true || result.error)) throw new Error("status 返回错误");
+        var state = extractState(result); if (!state) throw new Error("status 未返回完整 state；ok:true 动作回执不能解除阻止");
+        if (!publicationStatusResolved(state)) {
+          renderPublicationBlock(app.publicationBlocked.reason, app.publicationBlocked.request, state.accountSync);
+          setStatus("info", "status 仍未解决：accountSync 必须 available=true、retryBlocked=false，且状态不是 pending、publication-unresolved 或 sync-error；重复发布继续被阻止。");
+          return;
+        }
+        hidePublicationBlock();
+        applyState(state, "bridge", "account");
+        setStatus("info", "status 已明确返回完整 state 且账号同步可用；已解除重复发布阻止，但没有自动重发 apply。");
+      } catch (error) { setStatus("error", "status 仍未明确：" + (error && error.message ? error.message : String(error)) + "；重复发布继续被阻止。"); }
+      finally { setBusy(false); }
+    }
+    async function confirmApply() {
+      var pending = app.pendingConfirmation; if (!pending) return;
+      var request = copy(pending.request), types = pending.confirmationTypes.slice();
+      hideConfirmation();
+      await applyViaBridge(request, types);
+    }
+    function cancelConfirmation() {
+      if (!app.pendingConfirmation) return;
+      hideConfirmation(); setStatus("info", "已取消确认，未重发 apply。");
+    }
+    async function applyViaBridge(requestOverride, confirmedTypes) {
+      var request = requestOverride ? copy(requestOverride) : createApplyRequest(app.original, app.draft);
+      if (app.publicationBlocked) { setStatus("info", publicationBlockMessage(app.publicationBlocked)); return; }
+      if (app.pendingConfirmation && !confirmedTypes) { setStatus("info", "等待用户明确确认；不会自动重发 apply。"); return; }
+      if (!Object.keys(request.patch || {}).length) { setStatus("info", "没有需要提交的修改。"); return; }
+      if (confirmedTypes && confirmedTypes.length) request = withConfirmedConfirmationTypes(request, confirmedTypes);
+      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { revealOffline(request); setStatus("info", "未检测到宿主桥；已生成 global draft（全局草稿），尚未应用，也未伪造成功。"); return; }
+      if (request.scope === "account" && !accountSyncUsable()) { revealOffline(request); setStatus("info", "账号同步不可用，未提交；已生成 global draft（全局草稿），仍需回到原会话处理。"); return; }
+      var token = { id: ++app.nextLocalId, resolved: false }; app.pendingApply = token; setBusy(true); hideStatus();
+      try {
+        var result = await app.bridge.callTool(request); token.resolved = true;
+        var outcome = classifyApplyResult(result, request.scope);
+        if (outcome.kind === "confirmation-required") { renderConfirmation(request, outcome.confirmationTypes); setStatus("info", "宿主要求明确确认；尚未发布。确认类型仅按原文展示，点击确认按钮前不会重发。"); return; }
+        if (outcome.kind === "confirmation-invalid") { hideConfirmation(); setStatus("error", "宿主要求确认，但没有返回仅含文本的 confirmationTypes；未自动重发。"); return; }
+        if (outcome.kind === "publication-blocked" || outcome.kind === "account-unsynced") { hideConfirmation(); renderPublicationBlock(outcome.reason, request); setStatus(outcome.kind === "account-unsynced" ? "info" : "error", publicationBlockMessage({ reason: outcome.reason })); return; }
+        if (outcome.kind === "error") { hideConfirmation(); setStatus("error", "宿主明确拒绝本次 apply；未自动重试。"); return; }
+        if (outcome.kind === "unconfirmed") { hideConfirmation(); renderPublicationBlock("outcomeUnknown", request); setStatus("error", "宿主未返回本次范围提交回执；发布结果不确定，已阻止重复发布。"); return; }
+        hideConfirmation(); hidePublicationBlock(); applyState(outcome.state, "bridge", request.scope); setStatus("info", "设置已写入，宿主已返回新 state。请刷新模型目录并重新选择模型；尚未验证实际请求。");
+      } catch (error) { var message = error && error.message ? error.message : String(error); hideConfirmation(); renderPublicationBlock("outcomeUnknown", request); setStatus("error", "宿主桥调用失败，发布结果未知：" + message + "。已阻止自动或重复发布；请读取 status。"); }
+      finally { if (app.pendingApply && app.pendingApply.id === token.id) app.pendingApply = null; setBusy(false); }
+    }
+    function onBridgeNotification(payload) { var next = extractState(payload); if (!next) return; if (app.bridge && typeof app.bridge.callTool === "function") app.bridgeReady = true; if (app.pendingApply || app.pendingConfirmation || app.publicationBlocked) return; applyState(next, "bridge", app.draft && app.draft.scope); setConnection("online", "宿主桥已连接", "已通过 ui/notifications/tool-result 收到模型配置。"); }
+    function switchTab(tab) { var provider = tab === "providers", p = document.getElementById("panel-providers"), r = document.getElementById("panel-routing"), pt = document.getElementById("tab-providers"), rt = document.getElementById("tab-routing"); p.hidden = !provider; r.hidden = provider; pt.setAttribute("aria-selected", provider ? "true" : "false"); rt.setAttribute("aria-selected", provider ? "false" : "true"); notifySizeSoon(); }
+    function renderEditor() {
+      document.getElementById("waiting-panel").hidden = true; document.getElementById("settings-panel").hidden = false;
+      renderScope(); renderProviders(); renderRoutes();
+      ["new-provider-id", "new-provider-protocol", "new-provider-label", "new-provider-base-url", "new-provider-api-key-env", "new-provider-extra-models", "route-source", "route-target", "add-route-button", "add-provider-button"].forEach(function (elementId) { var node = document.getElementById(elementId); if (node) node.disabled = app.original.readOnly; });
+      refreshAction(); notifySizeSoon();
+    }
+    function applyState(state, reason, preserveScope) {
+      var normalized = normalizeState(state); if (!normalized) return false;
+      app.original = normalizeState(state); app.draft = copy(normalized); app.draft.scope = preserveScope === "session" || (preserveScope !== "account" && app.draft && app.draft.scope === "session") ? "session" : "account";
+      renderEditor(); var blockedReason = publicationReasonFromAccountSync(normalized.accountSync); if (blockedReason) renderPublicationBlock(blockedReason, null, normalized.accountSync); if (reason === "bridge") document.getElementById("waiting-detail").textContent = "已收到宿主 state。"; return true;
+    }
+    function applyStatePreservingDraft(state, reason, preserveScope) {
+      var normalized = normalizeState(state); if (!normalized) return false;
+      var previousDraft = app.draft ? copy(app.draft) : null, previousScope = preserveScope === "session" || previousDraft && previousDraft.scope === "session" ? "session" : "account";
+      app.original = normalized;
+      app.draft = copy(normalized);
+      app.draft.scope = previousScope;
+      if (previousDraft) {
+        app.draft.configuredMode = previousDraft.configuredMode;
+        app.draft.parameterPriority = previousDraft.parameterPriority;
+        app.draft.providers = copy(previousDraft.providers);
+        app.draft.routes = copy(previousDraft.routes);
+      }
+      renderEditor(); var blockedReason = publicationReasonFromAccountSync(normalized.accountSync); if (blockedReason) renderPublicationBlock(blockedReason, null, normalized.accountSync); if (reason === "bridge") document.getElementById("waiting-detail").textContent = "已收到宿主 state。"; return true;
+    }
+    async function connectBridge() {
       var bridge = window.wb3pBridge; app.bridge = bridge || null;
-      if (!bridge || typeof bridge.connect !== "function") {
-        setConnection("offline", "离线产物模式", "未检测到已握手的 MCP App bridge；页面不会调用 HTTP，也不会伪造应用成功。"); refreshAction(); return;
-      }
+      if (!bridge || typeof bridge.connect !== "function") { setConnection("offline", "离线产物模式", "未检测到已握手的 MCP App bridge；页面不会调用 HTTP，也不会伪造应用成功。"); refreshAction(); return; }
       app.bridgeConnecting = true; setConnection("connecting", "正在连接宿主 MCP App", "连接成功后将由 bridge tool-result 提供 state。");
-      if (typeof bridge.subscribe === "function") {
-        var subscription = bridge.subscribe(onBridgeNotification);
-        if (subscription && typeof subscription.catch === "function") subscription.catch(function () { setConnection("error", "宿主订阅失败", "桥未完成握手，继续使用离线 fallback。"); });
-      }
+      if (typeof bridge.subscribe === "function") { var subscription = bridge.subscribe(onBridgeNotification); if (subscription && typeof subscription.catch === "function") subscription.catch(function () { setConnection("error", "宿主订阅失败", "桥未完成握手，继续使用离线 fallback。"); }); }
       try {
         var result = await bridge.connect(); if (result === false) throw new Error("宿主返回 connect=false");
         app.bridgeReady = true; setConnection("online", "可以直接保存", "设置通过宿主 MCP 接口提交，不修改网页。");
-        var connectedState = extractState(result);
-        if (connectedState) applyState(connectedState, "bridge");
-        if (!app.original) {
-          if (typeof bridge.callTool !== "function") throw new Error("宿主 bridge 未提供 callTool");
-          var statusResult = await bridge.callTool({ action: "status" });
-          var statusState = extractState(statusResult);
-          if (!statusState) throw new Error("models_settings status 未返回可用 state");
-          applyState(statusState, "bridge");
-        }
-      } catch (error) {
-        app.bridgeReady = false;
-        var connectMessage = error && error.message ? error.message : String(error);
-        if (app.original) {
-          setConnection("offline", "离线产物模式", "宿主桥不可用；已载入初始 state，编辑只会生成离线指令：" + connectMessage);
-        } else {
-          setConnection("error", "模型配置不可用", "宿主连接或 status 读取失败，表单保持等待且没有应用任何设置：" + connectMessage);
-        }
-        setStatus("error", "读取模型配置失败，设置未应用：" + connectMessage);
-      }
-      finally { app.bridgeConnecting = false; refreshAction(); notifySizeSoon(); }
+        var connectedState = extractState(result); if (connectedState) applyState(connectedState, "bridge");
+        if (!app.original) { if (typeof bridge.callTool !== "function") throw new Error("宿主 bridge 未提供 callTool"); var statusResult = await bridge.callTool({ action: "status" }); var statusState = extractState(statusResult); if (!statusState) throw new Error("models_settings status 未返回可用 state"); applyState(statusState, "bridge"); }
+      } catch (error) { app.bridgeReady = false; var message = error && error.message ? error.message : String(error); if (app.original) setConnection("offline", "离线产物模式", "宿主桥不可用；已载入初始 state，编辑只会生成离线指令：" + message); else { setConnection("error", "模型配置不可用", "宿主连接或 status 读取失败，表单保持等待且没有应用任何设置：" + message); setStatus("error", "读取模型配置失败，设置未应用：" + message); } }
+      finally { app.bridgeConnecting = false; if (app.original) renderEditor(); refreshAction(); notifySizeSoon(); }
     }
-    function markMaxEffort() {
-      if (!app.original || !app.draft) return; var changed = 0;
-      app.draft.models.forEach(function (model) { var level = highestSupportedEffort(model.supportedEfforts) || (model.canDisableThinking === true && model.supportedEfforts.length === 0 ? "on" : null); if (level && model.configuredEffort !== level) { model.configuredEffort = level; changed += 1; } });
-      app.draft.maxEffortRequested = true; renderModels(); refreshAction();
-      setStatus("info", changed ? "已为 " + changed + " 个模型选择各自最高可用档；保存时会同时提交 maxEffort=true。" : "各模型已是最高可用档；保存时会提交 maxEffort=true。");
-    }
-    function addProvider() {
-      var idInput = document.getElementById("new-provider-id"), id = idInput.value.trim();
-      if (!id) { setStatus("error", "请输入 Provider ID。"); idInput.focus(); return; }
-      if (app.draft.providers.some(function (provider) { return provider.id === id; })) { setStatus("error", "Provider ID 已存在，请使用唯一值。"); idInput.focus(); return; }
-      var label = document.getElementById("new-provider-label").value.trim() || id;
-      app.draft.providers.push({
-        id: id, label: label, baseUrl: document.getElementById("new-provider-base-url").value.trim(), preset: document.getElementById("new-provider-preset").value.trim(),
-        apiKeyEnv: document.getElementById("new-provider-api-key-env").value.trim(), apiKeyEnvTouched: true, reuseCredential: false,
-        extraModels: uniqueStrings(document.getElementById("new-provider-extra-models").value.split(/[\n,]+/)), credential: { kind: "new", configured: false }
-      });
-      ["new-provider-id", "new-provider-label", "new-provider-base-url", "new-provider-preset", "new-provider-api-key-env", "new-provider-extra-models"].forEach(function (elementId) { document.getElementById(elementId).value = ""; });
-      renderProvidersAndDefaults(); setStatus("info", "Provider 已加入表单，尚未保存或应用。");
-    }
-    function addRoute() {
-      var aliasInput = document.getElementById("new-route-alias"), targetInput = document.getElementById("new-route-target"), alias = aliasInput.value.trim(), target = targetInput.value.trim();
-      if (!alias || !target) { setStatus("error", "路由 alias 和 target 都不能为空。"); (alias ? targetInput : aliasInput).focus(); return; }
-      app.draft.routes[alias] = target; aliasInput.value = ""; targetInput.value = ""; renderRoutes(); refreshAction(); setStatus("info", "路由已加入表单，尚未保存或应用。");
+    function readInitialState() {
+      var node = document.getElementById("initial-state"); if (!node || !node.textContent || false) return null;
+      try { return JSON.parse(node.textContent); } catch (error) { return null; }
     }
     function initialize() {
-      document.getElementById("model-selector").addEventListener("change", function (event) {
-        document.querySelectorAll("#model-list .model-card").forEach(function (card) { card.hidden = card.dataset.target !== event.target.value; }); notifySizeSoon();
-      });
-      document.getElementById("max-effort-button").addEventListener("click", markMaxEffort);
+      document.getElementById("tab-providers").addEventListener("click", function () { switchTab("providers"); });
+      document.getElementById("tab-routing").addEventListener("click", function () { switchTab("routes"); });
+      document.getElementById("scope-account").addEventListener("change", function () { if (app.draft) { app.draft.scope = "account"; renderScope(); } });
+      document.getElementById("scope-session").addEventListener("change", function () { if (app.draft) { app.draft.scope = "session"; renderScope(); } });
+      document.getElementById("model-source").addEventListener("change",function(e){if(app.draft){app.draft.configuredMode=e.target.value;refreshAction();}});
+      document.getElementById("parameter-priority").addEventListener("change",function(e){if(app.draft){app.draft.parameterPriority=e.target.value;refreshAction();}});
       document.getElementById("add-provider-button").addEventListener("click", addProvider);
       document.getElementById("add-route-button").addEventListener("click", addRoute);
       document.getElementById("copy-offline-button").addEventListener("click", copyOffline);
       document.getElementById("download-offline-button").addEventListener("click", downloadDraft);
-      document.getElementById("mode-official").addEventListener("change", function () { if (document.getElementById("mode-official").checked) { app.draft.switchMode = "official"; refreshAction(); } });
-      document.getElementById("mode-third-party").addEventListener("change", function () { if (document.getElementById("mode-third-party").checked) { app.draft.switchMode = "third-party"; refreshAction(); } });
-      document.getElementById("parameter-priority").addEventListener("change", function (event) { if (app.draft) { app.draft.parameterPriority = normalizeParameterPriority(event.target.value); event.target.value = app.draft.parameterPriority; refreshAction(); } });
-      document.getElementById("default-provider").addEventListener("change", function (event) { if (app.draft) { app.draft.defaultProvider = event.target.value || null; refreshAction(); } });
-      document.getElementById("routing-mode").addEventListener("change", function (event) { if (app.draft) { app.draft.routingMode = event.target.value; refreshAction(); } });
+      document.getElementById("account-connect-button").addEventListener("click", connectAccount);
+      document.getElementById("account-finish-button").addEventListener("click", finishAccountConnect);
+      document.getElementById("confirm-apply-button").addEventListener("click", confirmApply);
+      document.getElementById("cancel-confirmation-button").addEventListener("click", cancelConfirmation);
+      document.getElementById("status-recheck-button").addEventListener("click", resolvePublicationStatus);
       document.getElementById("apply-button").addEventListener("click", function () { if (app.bridgeReady) applyViaBridge(); else generateOffline(); });
       window.addEventListener("resize", notifySizeSoon);
-      var initial = readInitialState(); if (initial) applyState(initial, "initial"); refreshAction(); connectBridge();
+      var initial = readInitialState(); if (initial) applyState(initial, "initial", "account"); refreshAction(); connectBridge();
     }
     window.__wb3pSettingsInternals = Object.freeze({
-      EFFORT_ORDER: EFFORT_ORDER.slice(), sortEfforts: sortEfforts, highestSupportedEffort: highestSupportedEffort,
-      effortOptionValues: effortOptionValues, normalizeParameterPriority: normalizeParameterPriority, extractState: extractState, makePatch: makePatch
+      PROTOCOLS: PROTOCOLS.slice(), EFFORT_ORDER: EFFORT_ORDER.slice(), normalizeConfiguredMode: normalizeConfiguredMode, normalizeParameterPriority: normalizeParameterPriority,
+      normalizeState: normalizeState, normalizeCapability: normalizeCapability, normalizeRoute: normalizeRoute, makePatch: makePatch, createApplyRequest: createApplyRequest,
+      createOfflineInstruction: createOfflineInstruction, createAccountInstruction: createAccountInstruction, effortOptionValues: effortOptionValues, hasCommitReceipt: hasCommitReceipt,
+      confirmationTypesFromResult: confirmationTypesFromResult, withConfirmedConfirmationTypes: withConfirmedConfirmationTypes, classifyApplyResult: classifyApplyResult, publicationStatusResolved: publicationStatusResolved,
+      isAllowedWorkBuddyUrl: isAllowedWorkBuddyUrl, discoverRequest: discoverRequest, probeRequest: probeRequest, parseProviderTarget: parseProviderTarget,
+      importedTargets: importedTargets, extractState: extractState
     });
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize);
     else Promise.resolve().then(initialize);

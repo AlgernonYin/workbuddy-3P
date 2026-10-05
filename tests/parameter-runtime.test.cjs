@@ -24,7 +24,7 @@ function fixture(t) {
     assert.ok(!(r.stdout + r.stderr).includes(key), "private upstream key leaked"); return JSON.parse(r.stdout);
   };
   const sync = () => invoke("console.log(JSON.stringify(await lib.sync()))");
-  const apply = patch => invoke(`const s=await lib.settingsStatus();console.log(JSON.stringify(await lib.applySettings({action:'apply',expectedRevision:s.revision,patch:${JSON.stringify(patch)}})))`);
+  const apply = patch => invoke(`const s=await lib.settingsStatus();console.log(JSON.stringify(await lib.applySettings({action:'apply',scope:'session',expectedRevision:s.revision,patch:${JSON.stringify(patch)}})))`);
   const reg = () => read("workbuddy-3p.runtime.json");
   t.after(async () => {
     // Only kill identities created by this fixture, never scan arbitrary PIDs.
@@ -88,7 +88,7 @@ test("multiple actual MCP lifetimes share one host daemon; one EOF cannot break 
       child.once("error", reject);
     });
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
-    assert.equal((await reply).result.serverInfo.version, "2.5.1"); return child;
+    assert.equal((await reply).result.serverInfo.version, "3.0.0"); return child;
   };
   const [a, b] = await Promise.all([open(), open()]); assert.equal(f.reg().pid, first.pid);
   const exit = new Promise(resolve => a.once("exit", resolve)); a.stdin.end(); await exit;
@@ -118,7 +118,7 @@ test("priority is secret-free, revision guarded, backed up; thinking off and res
   f.apply({ maxEffort: true }); const next = await f.request(); await next.text(); assert.equal(f.calls.at(-1).body.reasoning_effort, "xhigh");
   const manifests = f.read(path.relative(f.dir, path.join(result.backup, "manifest.json")));
   assert.ok(manifests.some(m => m.file.endsWith("workbuddy-3p.parameters.json")));
-  const guard = f.invoke(`const fs=require('fs'),p=require('path').join(process.env.CODEBUDDY_CONFIG_DIR,'workbuddy-3p.parameters.json');const s=await lib.settingsStatus();fs.writeFileSync(p,JSON.stringify({version:1,priority:'native'}));try{await lib.applySettings({action:'apply',expectedRevision:s.revision,patch:{maxEffort:true}})}catch(e){console.log(JSON.stringify({rejected:/settings changed/.test(e.message)}));return}throw Error('accepted stale')`);
+  const guard = f.invoke(`const fs=require('fs'),p=require('path').join(process.env.CODEBUDDY_CONFIG_DIR,'workbuddy-3p.parameters.json');const s=await lib.settingsStatus();fs.writeFileSync(p,JSON.stringify({version:1,priority:'native'}));try{await lib.applySettings({action:'apply',scope:'session',expectedRevision:s.revision,patch:{maxEffort:true}})}catch(e){console.log(JSON.stringify({rejected:/settings changed/.test(e.message)}));return}throw Error('accepted stale')`);
   assert.equal(guard.rejected, true);
 });
 test("offline fallback only reuses original provider key at same normalized endpoint, not opaque projection", async t => {
@@ -136,7 +136,7 @@ test("failed routing commit rolls priority and projected credential/endpoint bac
     const files=['models.json','workbuddy-3p.state.json','workbuddy-3p.parameters.json'];const before=files.map(n=>fs.readFileSync(path.join(d,n),'utf8'));
     const s=await lib.settingsStatus(),write=fs.writeFileSync;let failed=false;
     fs.writeFileSync=(p,...a)=>{if(String(p).includes('workbuddy-3p.state.json.tmp-'))throw Error('injected state failure');return write(p,...a)};
-    try{await lib.applySettings({action:'apply',expectedRevision:s.revision,patch:{parameterPriority:'native'}})}catch(e){failed=true}finally{fs.writeFileSync=write}
+    try{await lib.applySettings({action:'apply',scope:'session',expectedRevision:s.revision,patch:{parameterPriority:'native'}})}catch(e){failed=true}finally{fs.writeFileSync=write}
     console.log(JSON.stringify({failed,restored:files.every((n,i)=>fs.readFileSync(path.join(d,n),'utf8')===before[i])}));`);
   assert.deepEqual(result, { failed: true, restored: true });
   const r = await f.request(); await r.text(); assert.equal(r.status, 200); assert.equal(f.calls[0].body.reasoning_effort, "xhigh");

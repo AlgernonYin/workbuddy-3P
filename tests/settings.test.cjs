@@ -34,7 +34,7 @@ function fixture(t, extra = {}) {
   const ok = expr => { const r = invoke(expr); assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout); };
   const read = name => JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
   const status = () => ok("console.log(JSON.stringify(await lib.settingsStatus()))");
-  const apply = (patch, revision = status().revision) => ok(`console.log(JSON.stringify(await lib.applySettings(${JSON.stringify({ action: "apply", expectedRevision: revision, patch })})))`);
+  const apply = (patch, revision = status().revision) => ok(`console.log(JSON.stringify(await lib.applySettings(${JSON.stringify({ action: "apply", scope: "session", expectedRevision: revision, patch })})))`);
   const snap = () => ["workbuddy-3p.json", "workbuddy-3p.effort.json", "workbuddy-3p.context.json", "workbuddy-3p.switch", "models.json", "workbuddy-3p.state.json"]
     .map(n => fs.existsSync(path.join(dir, n)) ? fs.readFileSync(path.join(dir, n), "utf8") : null);
   ok("console.log(JSON.stringify(await lib.sync()))");
@@ -69,7 +69,7 @@ test("on/off switch-only models do not acquire fake effort support", t => {
   f.apply({ efforts: { "p:toggle": "off", "p:a": "off" } });
   assert.equal(f.read("models.json").models.find(m => m.id === "toggle").reasoning.defaultEffort, "off");
   f.apply({ efforts: { "p:toggle": "on", "p:a": "on" } });
-  assert.equal(f.read("models.json").models.find(m => m.id === "a").reasoning.defaultEffort, "xhigh");
+  assert.equal(f.read("models.json").models.find(m => m.id === "a").reasoning.defaultEffort, "medium", "thinking on preserves the imported default rather than selecting the maximum");
   assert.deepEqual(f.status().models.find(m => m.id === "toggle").supportedEfforts, []);
 });
 test("unsupported effort, oversized contexts, invalid fields and secrets are rejected before writes", t => {
@@ -78,13 +78,13 @@ test("unsupported effort, oversized contexts, invalid fields and secrets are rej
     { contexts: { "p:a": 1000000 } }, { contexts: { "p:a": "32000" } }, { contexts: { "p:a": 1 } },
     { providers: { p: { apiKey: "DO_NOT_ACCEPT_KEYS_IN_CHAT" } } }, { providers: { p: { extraModels: [null] } } },
     { routes: { a: {} } }, { typo: true }, { maxEffort: true, efforts: { "p:a": "low" } }]) {
-    const r = f.invoke(`await lib.applySettings(${JSON.stringify({ action: "apply", expectedRevision: f.status().revision, patch })})`);
+    const r = f.invoke(`await lib.applySettings(${JSON.stringify({ action: "apply", scope: "session", expectedRevision: f.status().revision, patch })})`);
     assert.notEqual(r.status, 0); assert.deepEqual(f.snap(), before);
   }
 });
 test("stale panels cannot overwrite concurrent changes or a new model configuration", t => {
   const f = fixture(t);
-  const r = f.invoke(`const fs=require('fs'),path=require('path');const s=await lib.settingsStatus();await lib.applySettings({action:'apply',expectedRevision:s.revision,patch:{efforts:{'p:a':'low'}}});const p=path.join(process.env.CODEBUDDY_CONFIG_DIR,'models.json'),before=fs.readFileSync(p,'utf8');try{await lib.applySettings({action:'apply',expectedRevision:s.revision,patch:{maxEffort:true}});throw Error('accepted stale')}catch(e){if(!e.message.includes('settings changed'))throw e}if(fs.readFileSync(p,'utf8')!==before)throw Error('stale write changed models');console.log('true')`);
+  const r = f.invoke(`const fs=require('fs'),path=require('path');const s=await lib.settingsStatus();await lib.applySettings({action:'apply',scope:'session',expectedRevision:s.revision,patch:{efforts:{'p:a':'low'}}});const p=path.join(process.env.CODEBUDDY_CONFIG_DIR,'models.json'),before=fs.readFileSync(p,'utf8');try{await lib.applySettings({action:'apply',scope:'session',expectedRevision:s.revision,patch:{maxEffort:true}});throw Error('accepted stale')}catch(e){if(!e.message.includes('settings changed'))throw e}if(fs.readFileSync(p,'utf8')!==before)throw Error('stale write changed models');console.log('true')`);
   assert.equal(r.status, 0, r.stderr); assert.equal(f.read("workbuddy-3p.effort.json").models["p:a"], "low");
 });
 test("provider and route forms preserve credentials and unknown configuration, requiring endpoint consent", t => {
@@ -92,7 +92,7 @@ test("provider and route forms preserve credentials and unknown configuration, r
   f.apply({ providers: { p: { label: "New label" } }, routes: { "official-alias": "p:a" } });
   const cfg = f.read("workbuddy-3p.json"); assert.equal(cfg.myExtraField, "preserve"); assert.equal(cfg.providers.p.apiKey, canary);
   const before = f.snap(), revision = f.status().revision;
-  const denied = f.invoke(`await lib.applySettings(${JSON.stringify({ action: "apply", expectedRevision: revision, patch: { providers: { p: { baseUrl: "https://other.invalid/v1" } } } })})`);
+  const denied = f.invoke(`await lib.applySettings(${JSON.stringify({ action: "apply", scope: "session", expectedRevision: revision, patch: { providers: { p: { baseUrl: "https://other.invalid/v1" } } } })})`);
   assert.notEqual(denied.status, 0); assert.deepEqual(f.snap(), before);
   f.apply({ providers: { p: { baseUrl: "https://other.invalid/v1", reuseCredential: true } } });
   assert.equal(f.read("workbuddy-3p.json").providers.p.apiKey, canary);
@@ -108,7 +108,7 @@ test("official switch defers values, default clears switch and resumes third-par
 });
 test("state write failure restores configuration and all settings without replacing models inode", t => {
   const f = fixture(t), before = f.snap(), revision = f.status().revision;
-  const r = f.invoke(`const fs=require('fs');const rename=fs.renameSync;fs.renameSync=(a,b)=>{if(b.endsWith('workbuddy-3p.state.json'))throw Error('injected');return rename(a,b)};await lib.applySettings(${JSON.stringify({ action: "apply", expectedRevision: revision, patch: { contexts: { "p:a": 32000 }, maxEffort: true, providers: { p: { label: "Changed" } } } })})`);
+  const r = f.invoke(`const fs=require('fs');const rename=fs.renameSync;fs.renameSync=(a,b)=>{if(b.endsWith('workbuddy-3p.state.json'))throw Error('injected');return rename(a,b)};await lib.applySettings(${JSON.stringify({ action: "apply", scope: "session", expectedRevision: revision, patch: { contexts: { "p:a": 32000 }, maxEffort: true, providers: { p: { label: "Changed" } } } })})`);
   assert.notEqual(r.status, 0); assert.deepEqual(f.snap(), before); assert.equal(fs.existsSync(path.join(f.dir, "workbuddy-3p.lock")), false);
 });
 test("MCP Apps resource metadata and structured state use the real settings API", t => {
@@ -139,18 +139,18 @@ test("editing a private profile preserves its envelope and never creates a crede
 });
 test("effective environment switching is included in revision", t => {
   const f = fixture(t);
-  const r = f.invoke("const before=await lib.settingsStatus();process.env.WB3P_ENABLED='official';const after=await lib.settingsStatus();if(before.revision===after.revision)throw Error('revision unchanged');try{await lib.applySettings({action:'apply',expectedRevision:before.revision,patch:{maxEffort:true}});throw Error('accepted stale')}catch(e){if(!e.message.includes('settings changed'))throw e}console.log('true')");
+  const r = f.invoke("const before=await lib.settingsStatus();process.env.WB3P_ENABLED='official';const after=await lib.settingsStatus();if(before.revision===after.revision)throw Error('revision unchanged');try{await lib.applySettings({action:'apply',scope:'session',expectedRevision:before.revision,patch:{maxEffort:true}});throw Error('accepted stale')}catch(e){if(!e.message.includes('settings changed'))throw e}console.log('true')");
   assert.equal(r.status, 0, r.stderr);
 });
 test("a committed readback failure reports committed, not unapplied", t => {
   const f = fixture(t), revision = f.status().revision;
-  const result = f.ok(`const fs=require('fs');let committed=false;const rename=fs.renameSync,read=fs.readFileSync;fs.renameSync=(a,b)=>{const result=rename(a,b);if(b.endsWith('workbuddy-3p.state.json'))committed=true;return result};fs.readFileSync=(p,...args)=>{if(committed&&String(p).endsWith('workbuddy-3p.context.json'))throw Error('injected readback');return read(p,...args)};console.log(JSON.stringify(await lib.applySettings(${JSON.stringify({ action: "apply", expectedRevision: revision, patch: { contexts: { "p:a": 32000 } } })})))`);
+  const result = f.ok(`const fs=require('fs');let committed=false;const rename=fs.renameSync,read=fs.readFileSync;fs.renameSync=(a,b)=>{const result=rename(a,b);if(b.endsWith('workbuddy-3p.state.json'))committed=true;return result};fs.readFileSync=(p,...args)=>{if(committed&&String(p).endsWith('workbuddy-3p.context.json'))throw Error('injected readback');return read(p,...args)};console.log(JSON.stringify(await lib.applySettings(${JSON.stringify({ action: "apply", scope: "session", expectedRevision: revision, patch: { contexts: { "p:a": 32000 } } })})))`);
   assert.equal(result.committed, true); assert.equal(result.stateUnavailable, true);
   assert.equal(f.read("models.json").models.find(m => m.id === "a").maxInputTokens, 32000);
 });
 test("prepared plan drift rejects routing and does not roll back a concurrent external config edit", t => {
   const f = fixture(t), revision = f.status().revision, modelsBefore = fs.readFileSync(path.join(f.dir, "models.json"), "utf8");
-  const r = f.invoke(`const fs=require('fs');const rename=fs.renameSync;fs.renameSync=(a,b)=>{const out=rename(a,b);if(b.endsWith('workbuddy-3p.context.json')){const p=process.env.CODEBUDDY_CONFIG_DIR+'/workbuddy-3p.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.externalConcurrentEdit=true;fs.writeFileSync(p,JSON.stringify(c));}return out};await lib.applySettings(${JSON.stringify({ action: "apply", expectedRevision: revision, patch: { providers: { p: { label: "Candidate" } }, contexts: { "p:a": 32000 } } })})`);
+  const r = f.invoke(`const fs=require('fs');const rename=fs.renameSync;fs.renameSync=(a,b)=>{const out=rename(a,b);if(b.endsWith('workbuddy-3p.context.json')){const p=process.env.CODEBUDDY_CONFIG_DIR+'/workbuddy-3p.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.externalConcurrentEdit=true;fs.writeFileSync(p,JSON.stringify(c));}return out};await lib.applySettings(${JSON.stringify({ action: "apply", scope: "session", expectedRevision: revision, patch: { providers: { p: { label: "Candidate" } }, contexts: { "p:a": 32000 } } })})`);
   assert.notEqual(r.status, 0); assert.equal(f.read("workbuddy-3p.json").externalConcurrentEdit, true);
   assert.equal(fs.readFileSync(path.join(f.dir, "models.json"), "utf8"), modelsBefore);
 });
@@ -166,6 +166,6 @@ test("revisions are stable within a server, random across restart, and reject a 
   assert.notEqual(old, next);
   const stable = f.invoke("const a=await lib.settingsStatus(),b=await lib.settingsStatus();if(a.revision!==b.revision)throw Error('unstable live revision');console.log('true')");
   assert.equal(stable.status, 0, stable.stderr);
-  const invalid = f.invoke(`const old=${JSON.stringify(old)};await lib.applySettings({action:'apply',expectedRevision:old,patch:{maxEffort:true}})`);
+  const invalid = f.invoke(`const old=${JSON.stringify(old)};await lib.applySettings({action:'apply',scope:'session',expectedRevision:old,patch:{maxEffort:true}})`);
   assert.notEqual(invalid.status, 0); assert.match(invalid.stderr, /settings changed/);
 });

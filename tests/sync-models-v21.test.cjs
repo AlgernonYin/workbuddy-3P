@@ -80,6 +80,14 @@ const modelsPath = (dir) => path.join(dir, "models.json");
 const statePath = (dir) => path.join(dir, "workbuddy-3p.state.json");
 const configPath = (dir) => path.join(dir, "workbuddy-3p.json");
 
+function writeSameNameConfig(dir, providerName, provider) {
+  writeJson(configPath(dir), {
+    default: providerName,
+    mode: "same-name",
+    providers: { [providerName]: provider },
+  });
+}
+
 function findModel(out, id) {
   return (out.models || []).find((model) => model && model.id === id) || null;
 }
@@ -102,9 +110,8 @@ test("13. routing preserves user allowlist entries and uninstall restores hidden
       models: [{ id: "my-own", url: "https://user.invalid/chat/completions", apiKey: "sk-user" }],
       availableModels: ["glm-5.3", "custom-local:my-own"],
     });
-    const env = { WB3P_BASE_URL: "https://managed.example.invalid/v1", WB3P_API_KEY: KEY };
-
-    runOk(dir, env);
+    writeSameNameConfig(dir, "managed", { baseUrl: "https://managed.example.invalid/v1", apiKey: KEY });
+    runOk(dir);
     let out = readJson(modelsPath(dir));
     assert.ok(out, "models.json was not written by sync");
     let allow = out.availableModels || [];
@@ -112,7 +119,7 @@ test("13. routing preserves user allowlist entries and uninstall restores hidden
     assert.ok(allow.includes("custom-local:glm-5.3"), "plugin custom-local:glm-5.3 missing");
     assert.ok(allow.includes("custom-local:my-own"), "user custom-local:my-own missing");
 
-    runOk(dir, env, ["--uninstall"]);
+    runOk(dir, {}, ["--uninstall"]);
     out = readJson(modelsPath(dir));
     assert.ok(out, "models.json was not written by uninstall");
     allow = out.availableModels || [];
@@ -217,8 +224,9 @@ test("16. a provider without a key does not inherit another provider key on the 
   }
 });
 
-test("17. duplicate upstream model ids are skipped with an ownership warning", () => {
+test("17. duplicate upstream model ids stay isolated behind the parameter proxy", async () => {
   const dir = tempDir();
+  let serverId = null, pid = null;
   try {
     writeJson(configPath(dir), {
       default: "a",
@@ -231,18 +239,81 @@ test("17. duplicate upstream model ids are skipped with an ownership warning", (
     });
 
     const result = runOk(dir);
+    const reg = readJson(path.join(dir, "workbuddy-3p.runtime.json"));
+    assert.ok(reg, "parameter runtime registry missing");
+    serverId = reg.serverId; pid = reg.pid;
+
     const summary = jsonOut(result);
     const out = readJson(modelsPath(dir));
-    const fooModels = (out.models || []).filter((model) => model.id === "foo");
-    assert.equal(fooModels.length, 1, "duplicate upstream ids must produce one model");
-    assert.equal(fooModels[0].apiKey, "sk-test-a", "the first provider should own the duplicate upstream id");
-    assert.ok(
-      (summary.warnings || []).some((warning) => warning.includes("already belongs")),
-      `expected an ownership warning, got ${JSON.stringify(summary.warnings)}`,
-    );
-    assert.ok(!Object.prototype.hasOwnProperty.call(summary.routed, "glm-5.1"), "skipped route must not be reported as routed");
-    assert.ok((out.availableModels || []).includes("glm-5.1"), "skipped official slot must remain available as official");
+    const state = readJson(statePath(dir));
+    assert.equal(summary.parameterPriority, "native");
+    assert.equal(summary.parameterAdapter, "plugin-host-loopback");
+    assert.deepEqual(summary.providers.map((provider) => provider.name).sort(), ["a", "b"]);
+    assert.deepEqual(Object.keys(summary.routed).sort(), ["glm-5.0", "glm-5.1"]);
+    assert.deepEqual(summary.warnings || [], [], "duplicate upstream ids must not warn or drop a route");
+    for (const secret of ["sk-test-a", "sk-test-b"]) {
+      assert.ok(!result.stdout.includes(secret), `sync stdout leaked ${secret}`);
+      assert.ok(!result.stderr.includes(secret), `sync stderr leaked ${secret}`);
+    }
+
+    const first = (out.models || []).find((model) => (model.aliases || []).includes("glm-5.0"));
+    const second = (out.models || []).find((model) => (model.aliases || []).includes("glm-5.1"));
+    assert.ok(first, "first provider route missing");
+    assert.ok(second, "second provider route missing");
+    assert.equal((out.models || []).length, 2, "both provider routes must remain represented");
+    assert.equal(first.id, "foo");
+    assert.match(second.id, /^wb3p-[a-f0-9]{24}$/);
+    assert.notEqual(first.id, second.id);
+    assert.equal(first.workbuddy3pBinding, undefined);
+    assert.deepEqual(second.workbuddy3pBinding, { provider: "b", model: "foo", alias: "glm-5.1" });
+
+    const serializedModels = JSON.stringify(out);
+    assert.ok(!serializedModels.includes("sk-test-a"), "provider a upstream key leaked into models");
+    assert.ok(!serializedModels.includes("sk-test-b"), "provider b upstream key leaked into models");
+    for (const model of [first, second]) {
+      assert.match(model.url, /^http:\/\/127\.0\.0\.1:\d+\/models\//);
+      assert.ok(!model.url.includes(model.apiKey), "opaque token must not appear in the proxy URL");
+      assert.ok(model.apiKey.length >= 32 && !["sk-test-a", "sk-test-b"].includes(model.apiKey), "proxy credential must be an opaque token");
+    }
+    assert.notEqual(first.apiKey, second.apiKey, "each logical model must receive its own opaque token");
+
+    assert.deepEqual(Object.keys(state.providers).sort(), ["a", "b"]);
+    assert.deepEqual(state.providers.a.modelIds, [first.id]);
+    assert.deepEqual(state.providers.b.modelIds, [second.id]);
+    assert.equal(state.providers.a.apiKey, "sk-test-a");
+    assert.equal(state.providers.b.apiKey, "sk-test-b");
+
+    const routeCode = [
+      "const lib=require(" + JSON.stringify(SCRIPT) + ");",
+      "(async()=>{",
+      "const serverId=" + JSON.stringify(serverId) + ";",
+      "const ids=" + JSON.stringify([first.id, second.id]) + ";",
+      "const out={};for(const id of ids)out[id]=await lib.proxyRouteSnapshot(id,serverId);",
+      "console.log(JSON.stringify(out));",
+      "})().catch(e=>{console.error(e.message);process.exitCode=1});",
+    ].join("");
+    const routeResult = spawnSync(process.execPath, ["-e", routeCode], { cwd: path.dirname(SCRIPT), env: makeEnv(dir), encoding: "utf8", timeout: 15000 });
+    assert.equal(routeResult.status, 0, routeResult.stderr || routeResult.error?.message);
+    const routes = JSON.parse(routeResult.stdout);
+    const firstRoute = routes[first.id], secondRoute = routes[second.id];
+    assert.ok(firstRoute, "first proxy route missing");
+    assert.ok(secondRoute, "second proxy route missing");
+    assert.equal(firstRoute.model.id, first.id);
+    assert.equal(firstRoute.upstreamModel, undefined);
+    assert.equal(firstRoute.apiKey, "sk-test-a");
+    assert.equal(firstRoute.url, expectedChatUrl("https://shared.example.invalid/v1"));
+    assert.equal(firstRoute.priority, "native");
+    assert.equal(secondRoute.model.id, second.id);
+    assert.equal(secondRoute.upstreamModel, "foo");
+    assert.equal(secondRoute.apiKey, "sk-test-b");
+    assert.equal(secondRoute.url, expectedChatUrl("https://shared.example.invalid/v1"));
+    assert.equal(secondRoute.priority, "native");
   } finally {
+    if (serverId) {
+      const retireCode = "const lib=require(" + JSON.stringify(SCRIPT) + ");lib.retireProxyRuntime(" + JSON.stringify(serverId) + ").catch(()=>{});";
+      try { spawnSync(process.execPath, ["-e", retireCode], { cwd: path.dirname(SCRIPT), env: makeEnv(dir), encoding: "utf8", timeout: 15000 }); } catch {}
+    }
+    if (pid) { try { process.kill(pid); } catch {} }
     rmDir(dir);
   }
 });
@@ -322,21 +393,22 @@ test("20. a user model with a managed id is displaced, warned, and restored on u
       models: [{ id: "glm-5.3", url: userUrl, apiKey: "sk-test-user" }],
       availableModels: ["glm-5.3"],
     });
-    const env = { WB3P_BASE_URL: "https://managed.example.invalid/v1", WB3P_API_KEY: KEY };
+    const baseUrl = "https://managed.example.invalid/v1";
+    writeSameNameConfig(dir, "managed", { baseUrl, apiKey: KEY });
 
-    const result = runOk(dir, env);
+    const result = runOk(dir);
     const summary = jsonOut(result);
     let out = readJson(modelsPath(dir));
     let model = findModel(out, "glm-5.3");
     assert.ok(model, "plugin glm-5.3 model missing");
-    assert.equal(model.url, expectedChatUrl(env.WB3P_BASE_URL), "plugin should replace the user model");
+    assert.equal(model.url, expectedChatUrl(baseUrl), "plugin should replace the user model");
     assert.equal(model.apiKey, KEY, "plugin model should use the sync key");
     assert.ok(
       (summary.warnings || []).some((warning) => warning.includes("user model glm-5.3 is replaced")),
       `missing replacement warning, got ${JSON.stringify(summary.warnings)}`,
     );
 
-    runOk(dir, env, ["--uninstall"]);
+    runOk(dir, {}, ["--uninstall"]);
     out = readJson(modelsPath(dir));
     model = findModel(out, "glm-5.3");
     assert.ok(model, "user glm-5.3 model was not restored");
@@ -506,7 +578,8 @@ test("23. one provider without a key produces a partial success summary", () => 
 
 test("24. concurrent syncs leave one valid models.json and no lock file", async () => {
   const { spawn } = require("node:child_process");
-  const env = { WB3P_BASE_URL: "https://concurrent.example.invalid/v1", WB3P_API_KEY: KEY };
+  const baseUrl = "https://concurrent.example.invalid/v1";
+  const writeFixture = dir => writeSameNameConfig(dir, "managed", { baseUrl, apiKey: KEY });
   const spawnAsync = (dir, extra) => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [SCRIPT], {
       cwd: path.dirname(SCRIPT),
@@ -524,15 +597,17 @@ test("24. concurrent syncs leave one valid models.json and no lock file", async 
   const singleDir = tempDir();
   const concurrentDir = tempDir();
   try {
-    runOk(singleDir, env);
+    writeFixture(singleDir);
+    runOk(singleDir);
     const single = readJson(modelsPath(singleDir));
     assert.ok(single, "single sync did not produce valid JSON");
     const singleCount = (single.models || []).length;
     assert.ok(singleCount > 0, "single sync produced no models");
 
+    writeFixture(concurrentDir);
     const [first, second] = await Promise.all([
-      spawnAsync(concurrentDir, env),
-      spawnAsync(concurrentDir, env),
+      spawnAsync(concurrentDir, {}),
+      spawnAsync(concurrentDir, {}),
     ]);
     for (const result of [first, second]) {
       assert.equal(result.status, 0, `concurrent sync failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);

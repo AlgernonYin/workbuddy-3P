@@ -2,484 +2,175 @@
 
 [English](README.md)
 
-**版本：** 2.5.1
+**版本：** 3.0.0 候选，尚未发布。候选证据包括本地 237/237 测试、官方私有 API/preflight 的选择性检查，以及一次 refresh 后立即复用检查；尚未完成新沙箱全局验收，因此不声明发布验收或生产结果。
 
-WorkBuddy 3P 是一个非官方、MIT 许可的插件市场，面向云端 WorkBuddy / CodeBuddy Code。它让模型选择使用你自己的 OpenAI 兼容 API。网页端和手机端共用同一套云沙箱机制，因此不需要修改网页或客户端。
+WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件市场。它让 WorkBuddy 使用你控制的 OpenAI Chat Completions 兼容 API。网页端和手机端共用云端沙箱机制，不需要修改客户端或网页。路由后的槽位仍可能显示 WorkBuddy 模型名；能打开菜单并不证明实际流量已经走第三方。
 
-插件只改写自己管理的模型配置，ID 不由插件管理的用户模型会保留。
+插件只管理自己拥有的模型配置；不归它管理的既有用户模型保持不变。
 
-## 设置入口（2.5）
+## 两层设置
 
-在会话中说 **“打开 WorkBuddy 3P 设置”**，或调用 `/models-settings`。支持 MCP Apps 的宿主会显示交互面板：
+### 1. 供应商 + 模型
 
-- 参数优先级（3P/宿主原生）与官方/第三方切换；选择模型后调整其实际支持的思考档位。
-- 输入窗口可调小并恢复默认，不能扩大上游模型容量。
-- 编辑 API 地址、Provider、额外模型和官方槽位路由；现有凭据保留，面板不回显密钥。
-- “全部最高”逐模型选择最高合法档，不会把 Qwen 等模型硬设为 `max`。
+- 会话路由只支持 OpenAI Chat Completions 兼容供应商。没有协议选择器，插件也不会把其它传输协议翻译成 Chat Completions。
+- 配置供应商名称、HTTPS `baseUrl` 和凭据引用（例如 `apiKeyEnv`）。不要把 API key 写进 README 示例、聊天或公开 profile。
+- 供应商支持模型列表接口时，用 `GET /models` 发现模型。返回 404、405 或 501 时手动导入模型 ID。模型名不能证明 CTX、工具、图片或 reasoning 支持。
+- 每个导入模型只声明你确实知道的内容：输入 CTX、输出上限、工具/图片支持、reasoning 支持和 `supportedEfforts`。未知值保持未知。不要猜 128K，也不要把输入上限当成供应商真实容量或已实现上下文压缩。
+- 连接探针只在需要时显式执行。它会发送固定 marker，`max_tokens` 为 16，可能产生费用。`HTTP 200` 不是完成依据：只有响应完成且包含 marker 才算探针成功。探针只验证 endpoint/model，不验证宿主路由、协议翻译或当前会话真实流量。
 
-工具入口为 `models_settings`（`status` / `panel` / `apply`）。直接保存只走标准 MCP Apps 宿主桥，不开公网端口、不改网页。宿主不渲染 MCP Apps 时，使用会话选项向导；HTML 产物是**草案编辑器**，需将生成的无密钥指令发回原会话，不能把预览或复制当成已保存。浏览器隔离夹具已验证桥接保存和手机尺寸布局；官方云端面板、新会话和手机真机仍须独立验收，不能把宿主源码含接口当成通过。
+### 2. 路由
 
-保存会检查配置 revision，创建私有备份，并在原路由锁内提交；旧面板不能覆盖新配置。普通写失败会回滚，检测到的外部并发变更不会在回滚时被覆盖。所有写者应遵守同一路由锁：对不协作的外部编辑器，最后比较到替换之间仍有极窄竞争窗口，不能保证 OS 级 compare-and-swap；这也不是多文件 crash-atomic 事务。账号私有 profile 的修改只改当前沙箱的本地副本，不会创建遮蔽它的 `workbuddy-3p.json`，也不会自动上传账号。沙箱独立状态仍需更新并上传私有 profile 才影响未来新沙箱。
-
-固定宿主凭据使用私有文件/环境；新 Provider 表单只接受环境变量名，不接受 API Key 文本。更换地址须提供新引用或明确勾选复用原凭据，避免把原密钥偷偷发给新服务。密钥设置仍通过私有运行时或账号私有包完成。
-
-参数优先级与回环边界请看[参数优先级说明](docs/parameter-priority.md)；模型档位请看[逐模型能力矩阵](docs/model-capabilities.md)，输入窗口请看[官方容量核对表](docs/model-windows.md)。2026-10-02 百炼实测：GLM-5/5.1 拒绝 `max`，最高可用是 `xhigh`；不能照抄泛化的 GLM 参数表。Kimi K3 已补齐 `low/high/max`。10 个旧型号的容量超报也已纠正。关闭思考仅在已验证的宿主路径开放；native 路径下 Kimi K3、DeepSeek V4.1 Flash 和 MiniMax M3 不提供未实现的关闭开关；3p 路径按下文已声明能力处理。`thinking_budget` 和 `ultracode` 不在本功能内。
-
-**生效边界：** `3p` 优先级由目标云端适配器强制已声明的思考参数；`native` 优先级仍允许原生用户/会话覆盖。`off` 会禁用自定义槽位的原生 reasoning 能力，并在 `3p` 下明确下发已支持的供应商开关，不修改全局设置。宿主缓存旧目录时仍需刷新目录再重选；刷新页面、resync 或保存成功不是运行时证据。上下文设置只改变宿主输入限制；上游 API 没有通用的 `context_window` 参数。面板 revision 使用进程内随机密钥 HMAC；MCP 重启后须重新读取旧面板/草案。
-
-私有备份在 Linux 上使用目录 `700`、文件 `600`；Windows 的 `chmod` 不等于 NTFS ACL，请将配置目录放在仅自己的账户可访问的位置，不要同步/共享备份目录。
-
-## 参数优先级与目标云端回环（2.5）
-
-`state.parameterPriority` / `patch.parameterPriority` 只接受 `3p` 或 `native`；state 缺失时按 `3p`。解析顺序为已保存的 `workbuddy-3p.parameters.json` > `WB3P_PARAMETER_PRIORITY` > `3p`，不暗混 CLI 默认。
-
-`3p` 让第三方请求按 3P 声明参数运行，并在目标云端沙箱内自动启停共享 Node 回环守护进程。宿主调用端使用不透明代理 key；代理读取私有、权限为 `600` 且已 gitignore 的 state/runtime 缓存，仅在向上游发出的 Authorization 请求中使用原上游 key，不把原 key 返回 UI 或会话。这里的“本机/localhost”指该沙箱，不是助手 Windows 电脑，也不是网页或手机客户端。
-
-`native` 走原生直连并关闭 3P 强制参数。旧缓存若仍指向回环，代理返回 HTTP 410，必须重选模型，不做透明透传；`official` 拒绝代理转发，不产生第三方流量。
-
-思考档位只按 live `supportedEfforts`、`canDisableThinking` 和协议声明判断，不用 `onlyReasoning` 猜档位。`3p` 下 DeepSeek V4.1 Flash 与 Kimi K3 的 `off` 可由代理强制，2.4 的 native off 限制仅适用于 native 路径。输入窗口是宿主本地输入限制，不扩大上游容量，也不是上下文压缩已通过。保存配置不等于 HTTP 成功，`runtimeVerified:false` 保持不变。
-
-## 原理
-
-- `SessionStart` hook 和 stdio MCP server 启动时都会运行 `sync-models.cjs`。同步、切换和卸载操作会用 `~/.codebuddy/workbuddy-3p.lock` 串行化。已有 `models.json` 保留 inode 原位写入，以兼容宿主的文件监视器；状态文件原子替换。普通写失败会回滚，但这不是跨文件 crash-atomic 事务，原位更新期间宿主仍可能看到短暂的读取窗口。
-- 同步脚本写入 `~/.codebuddy/models.json`，权限为 `600`。
-- 每条第三方模型以目标上游模型 ID 作为自定义模型 ID，`aliases` 中保存需要解析到它的 WorkBuddy 官方 ID。WorkBuddy 将这些自定义槽位显示为 `custom-local:<model-id>`。
-- `availableModels` 只隐藏实际被路由的官方 ID；上游模型 ID 不会仅因为它是自定义模型 ID 而被隐藏。如果用户原有 allowlist 含被路由的官方 ID，插件会暂时移除，卸载或切回官方时恢复。
-- `keepOfficial` 中的官方 ID，以及未能路由的 ID，继续使用官方后端，包括 `auto`、混元模型和其他列出的官方条目。
-- 与插件生成模型同 ID 的用户模型会在插件激活期间被替换，并输出 warning；卸载或切回官方时恢复。
-- `~/.codebuddy/workbuddy-3p.state.json` 记录插件管理的模型 ID 和 allowlist 条目。后续同步会保留 ID 不在管理列表中的用户模型。
-
-## 快速开始
-
-1. 在 WorkBuddy 中添加插件来源，类型选 GitHub，地址填 `https://github.com/AlgernonYin/workbuddy-3P`。
-   - 中国大陆云沙箱无法访问 GitHub 时，使用维护者镜像 `https://cnb.cool/AlgernonYin/workbuddy-3P`（镜像，内容与 GitHub `main` 同步）。
-2. 安装 `custom-api-models` 插件。
-3. 云端会话使用下文的账号私有配置包；固定宿主可用 JSON 文件或环境变量。插件选项仅适用于能保存并同步它们的宿主。
-4. 新建 WorkBuddy 会话，在菜单中选择已路由的官方模型名称。
-
-### 零配置文件
-
-设置以下环境变量，或使用同名的插件选项。
-
-#### 通用 OpenAI 兼容
-
-```text
-WB3P_BASE_URL=https://api.example.com/v1
-WB3P_API_KEY=<your-api-key>
-```
-
-#### 百炼
-
-```text
-WB3P_PRESET=bailian
-WB3P_API_KEY=<your-api-key>
-```
-
-插件选项名称为 `ENABLED`、`BASE_URL`、`API_KEY`、`PRESET` 和 `ROUTES`。`WB3P_ROUTES` 必须是 JSON 对象。
-
-没有设置 `BASE_URL`、`PRESET`，且没有本地配置或私有 profile 时，插件不做任何路由，也没有默认 preset。没有可解析的 API key 时，不会添加路由模型，也不会隐藏官方条目。
-
-### 新沙箱与密钥
-
-云端网页在当前实测版本没有可用的插件选项保存入口；自定义 MCP 保存也会报 `saveConfiguration` 未定义。新沙箱应以**账号私有技能包**为主方案，通过 WorkBuddy 的个人技能上传入口同步：
-
-```bash
-python scripts/make-private-profile.py --config /opt/workbuddy-3p/config.json --output /tmp/account-private-profile.zip --embed-keys
-```
-
-上传得到的 ZIP 至自己的个人技能资产，切勿发布到技能市场、分享下载链接或提交 Git。这个包含无密钥的 `SKILL.md` 和私密的 `workbuddy-3p.profile.json`；profile 含配置，并在使用 `--embed-keys` 时含 API key。平台上传预检会要求确认凭据风险。它不是加密的密钥保险库，账号和沙箱内有权限的进程可以读取。
-
-插件只在本机配置和显式环境变量都未设置时，读取 `<config-dir>/skills/*/workbuddy-3p.profile.json`。profile 必须与 `SKILL.md` 位于同一技能目录，且其 YAML frontmatter 含 `name: workbuddy-3p-profile`；多个配置包会报错。schema 标记只用于防误配置，不是签名或身份认证。已安装技能和用户目录必须可信。
-
-用 `models_status` 确认 `configuredMode` 和磁盘路由状态。重新上传私有包会改变未来沙箱的默认值，但不会覆盖已有本地开关；开关本身只作用于当前沙箱，不是账号全局。
-
-### 使用配置文件
-
-创建 `~/.codebuddy/workbuddy-3p.json`：
+路由必须显式：一个 WorkBuddy 官方槽位指向 `provider:model`，并可带单路由 effort。
 
 ```json
 {
-  "default": "main",
-  "mode": "same-name",
-  "effort": {
-    "default": "high",
-    "models": {
-      "main:qwen3.8-max": "xhigh"
-    }
-  },
-  "providers": {
-    "main": {
-      "baseUrl": "https://api.example.com/v1",
-      "apiKeyEnv": "MY_API_KEY"
-    }
-  },
   "routes": {
-    "glm-5.3": "my-upstream-model",
-    "kimi-k3": "official"
-  },
-  "keepOfficial": []
-}
-```
-
-对自托管或固定机器用法，可把配置放在 `/opt/workbuddy-3p/config.json` 或 `/etc/workbuddy-3p/config.json`，并用 `apiKeyFile` 指向本机权限为 `600` 的密钥文件。
-
-脚本按以下顺序查找配置，使用第一个已存在的 JSON 对象：
-
-1. `$WB3P_CONFIG_JSON`
-2. `$WB3P_CONFIG`
-3. `$CODEBUDDY_CONFIG_DIR/workbuddy-3p.json`；未设置 `CODEBUDDY_CONFIG_DIR` 时使用 `~/.codebuddy/workbuddy-3p.json`
-4. `/etc/workbuddy-3p/config.json`
-5. `/opt/workbuddy-3p/config.json`
-6. `<plugin-root>/config.json`
-
-JSON 损坏或文件不可读时会报错，不会跳过该来源继续查找。如果没有可用文件，则使用上一节的环境变量/插件选项配置方式。
-
-## 官方 / 第三方开关
-
-`resolveSwitch` 使用以下顺序：
-
-| 优先级 | 来源 |
-| --- | --- |
-| 1 | `<config-dir>/workbuddy-3p.switch`（默认 `~/.codebuddy/workbuddy-3p.switch`） |
-| 2 | 环境变量 `WB3P_ENABLED` |
-| 3 | 插件选项 `ENABLED`（留空则继续向下判断） |
-| 4 | 配置文件中的 `enabled` |
-| 5 | 内置默认值：`third-party` |
-
-第 1-3 行的高优先级来源选择 `official` 时，会绕过 provider/profile 配置，即使配置损坏也可使用；但移除/恢复插件条目仍依赖 `workbuddy-3p.state.json` 中的完整归属记录。state 损坏，或存在 2.2.2 归属标记但 state 丢失时，状态报 unknown 并拒绝改动。旧版没有标记的遗留条目无法自动识别；应恢复已知良好的备份，不要盲删。
-
-开关是 per-sandbox，不跨账号全局。修改私有 profile 的 `enabled` 只改变尚无更高优先级本地开关的未来沙箱默认行为，不会强制覆盖已有本地开关。
-
-开关取值为 `third-party` 和 `official`。切换方式：
-
-- 在会话中调用 MCP 工具 `models_switch`，参数为 `{"mode":"official"}`、`{"mode":"third-party"}` 或 `{"mode":"default"}`。
-- 使用插件 `commands` 目录中的 `/models-official`、`/models-third-party` 或 `/models-status`。
-- 运行 `node scripts/sync-models.cjs --official`、`--third-party`、`--switch clear` 或 `--status`。
-- `default` 和 `--switch clear` 会删除当前沙箱的开关文件，并回到较低优先级的来源。
-
-切到 `official` 会移除插件写入的模型，恢复被隐藏的官方条目和被替换的用户模型；再切回 `third-party` 会重新路由。WorkBuddy 重新加载文件后，新请求才会采用这些路由，菜单名称可能不变。`models_status` 只报告配置意图和磁盘状态，不证明实际流量（`runtimeVerified: false`）。宿主未重新加载时，重新打开同一沙箱/会话；全新沙箱会采用账号默认值，需要再次设置所需开关。
-
-## 配置参考
-
-### 切换后必须重新选模型（云端宿主限制）
-
-开关修改路由配置，不会修改云端会话内存中的当前模型。2026-09-30 实测：切到官方后不重新选模型，会出现 `Custom model custom-local:... has no endpoint url configured`。重复写配置不能消除旧选择。
-
-网页和手机操作：先选择未路由的官方模型（例如 `Hy4 preview`），调用 `models_switch` 或斜杠命令，再选择目标模型后发送下一条消息。如果菜单已选中同名项，先切到未路由的官方模型再选目标，确保触发重新选择。全新沙箱采用账号默认值，不继承旧沙箱的开关。工具返回 `requiresModelReselection: true`；插件不会修改网页，也不承诺无缝热切换。
-
-**2.5.1 官方目录兼容：** 2026-10-03 云端 Native 2.155.0 实测，删除 `availableModels` 后即使刷新网页并重选也可能继续使用旧 `custom-local` ID；显式官方清单使同一宿主的 GLM-5.1 官方请求恢复。撤销托管路由且原配置没有 allowlist 时，插件物化随包目录作为兼容 fallback，并以无凭据 state 记录精确 projection；它不是宿主实时完整目录。后续清理仅在 projection 未变化时恢复“字段不存在”。外部添加、删除或重排后，卸载保留整个当前字段，直接切第三方会拒绝并提示先清理/恢复所有权。原有用户 allowlist（含 `[]`）保持原语义；用户模型与官方 ID 冲突会告警而非覆盖。缺失/无效目录不写空列表，不伪装官方恢复。详见[兼容边界](docs/official-switch-compatibility.md)。
-
-全新沙箱的插件/私有配置初始化可能晚于模型选择；插件就绪后重新选择目标，不能假定启动后的第一条请求已走自定义 API。手机端共用云端配置，但尚未进行真机验收。
-
-### 顶层字段
-
-| 字段 | 行为 |
-| --- | --- |
-| `providers` | 必填非空对象，键为 provider 名称。 |
-| `default` | 默认 provider 名称，必须存在；省略时使用第一个 provider。 |
-| `mode` | 路由模式，默认 `same-name`。 |
-| `routes` | 可选对象，将官方模型 ID 映射到路由目标。显式路由在推导路由和 `keepOfficial` 之后应用。 |
-| `keepOfficial` | 可选官方 ID 数组，用于保留官方后端。它会从 preset/同名推导路由中移除这些 ID，但显式 `routes` 仍可再次路由它们。 |
-| `models` | 可选的能力覆盖，键格式为 `"<provider>:<upstream-model>"`。 |
-| `defaults` | 可选能力默认值；provider 没有 `defaults` 且模型没有 preset template 时使用。 |
-| `enabled` | `official`/`false` 选择官方后端；`third-party`/`true` 启用路由。开关文件、`WB3P_ENABLED` 和插件选项 `ENABLED` 优先于它。 |
-| `effort` | 可选的路由模型 reasoning effort 默认值。`effort.default` 是默认档位，`effort.models["<provider>:<upstream-model>"]` 设置单模型档位；沙箱本地覆盖优先于配置。 |
-
-### Provider 字段
-
-| 字段 | 行为 |
-| --- | --- |
-| `preset` | 可选内置 preset 名称，目前为 `bailian`。 |
-| `baseUrl` | OpenAI 兼容 base URL。必须使用 HTTPS；仅 `localhost`、`127.0.0.1`、`::1` 或 provider 设置 `allowInsecureHttp: true` 时允许 HTTP。URL 含 userinfo、query 或 fragment 会报错。已经以 `/chat/completions` 结尾时直接使用，否则追加 `/chat/completions`。preset 也可以提供该值。 |
-| `allowInsecureHttp` | 可选布尔值，允许非本机 HTTP `baseUrl`；默认 `false`。 |
-| `label` | 生成的自定义模型显示名前缀：`<label> / <upstream-model>`。默认依次使用 preset 的 label、provider 名称。 |
-| `apiKey` | 直接写入的 API key。为避免配置中保存密钥，优先使用环境变量或文件。 |
-| `apiKeyEnv` | 保存密钥的环境变量名。 |
-| `apiKeyFile` | 密钥文件，内容可以是 `{"apiKey":"..."}`，也可以是不含空白字符的原始 key。本机密钥文件建议使用 `600` 权限。 |
-| `apiKeyUrl` | 返回 `{"apiKey":"..."}` 的私有 HTTPS 地址。非 HTTPS 地址会报错。 |
-| `models` | 上游模型 ID 到能力设置的映射，会覆盖 preset 中的同名模型设置。 |
-| `defaults` | 当前 provider 模型的能力默认值。 |
-| `extraModels` | 额外暴露为自定义模型的上游模型 ID 数组，不映射官方槽位。 |
-
-Provider 必须直接提供 `baseUrl`，或由 preset 提供。
-
-### 路由模式
-
-| 模式 | 行为 |
-| --- | --- |
-| `same-name` | 默认模式。对每个已知可路由的官方 ID，优先使用 preset 的映射；没有映射时，在默认 provider 上使用同名模型，除非 preset 把它列入 `unsupported`。显式 `routes` 仍会覆盖结果。 |
-| `preset-only` | 只根据默认 provider 的 preset 生成路由。显式 `routes` 仍会覆盖结果。 |
-| `explicit` | 不生成 preset 或同名路由，只使用显式 `routes` 和 `extraModels`。 |
-
-`same-name` 和 `preset-only` 还会把 preset 中的模型 ID 暴露为额外自定义模型。因此百炼 preset 会暴露 `qwen3.8-max` 和 `qwen3.8-flash`，即使它们默认不替换官方槽位。
-
-路由优先级为：preset/同名推导 → `keepOfficial` 移除 → 显式 `routes`。
-
-### 路由目标
-
-| 目标 | 含义 |
-| --- | --- |
-| `"official"` | 删除该路由，继续使用官方模型。 |
-| `"<provider>:<model>"` | 将官方 ID 发给指定 provider 的指定上游模型。如果前缀不是已配置 provider，插件会输出 warning，并把整个字符串作为模型名发给默认 provider。 |
-| `"<provider>"` | 将官方 ID 发给指定 provider 的同名模型。 |
-| `"<model>"` | 将官方 ID 发给默认 provider 的指定模型。 |
-| `{"provider":"p","model":"m"}` | 对象形式。省略 `provider` 或 `model` 时，分别回退到默认 provider 或官方 ID。 |
-
-provider 形式的写法应使用已配置的 provider 名称。显式路由优先于推导路由和 `keepOfficial`。
-
-### 能力参数覆盖
-
-越具体的设置优先级越高：
-
-1. `models["<provider>:<upstream-model>"]`
-2. `providers.<name>.models["<upstream-model>"]`
-3. preset 的模型设置和 template
-4. provider 或顶层 defaults
-5. 内置回退值
-
-示例：
-
-```json
-{
-  "models": {
-    "main:my-upstream-model": {
-      "maxInputTokens": 200000,
-      "maxOutputTokens": 32768,
-      "supportsToolCall": true,
-      "supportsImages": true,
-      "supportsReasoning": true
+    "official-slot": {
+      "provider": "example",
+      "model": "upstream-model-id",
+      "effort": "high"
     }
   }
 }
 ```
 
-上游 API 需要时，preset template 还可以使用 `onlyReasoning`、`useCustomProtocol`、`compat`、`thinkingLevelMap` 和 `reasoning` 等字段。
+- 新配置使用显式路由，且不会自动生成任何路由。不会预选供应商或厂商 preset，也不提供最高 effort 默认值。
+- 旧 preset/推导模式和内置 preset 只作为旧配置的高级兼容路径；仅在旧配置明确写入时识别，不是公开默认或上手流程。
+- 每条路由的 effort 必须来自该模型声明的 `supportedEfforts`。路由级 effort 优先于该模型默认 effort。不要从 `onlyReasoning` 推断可调 effort；公开账号流程不提供“全部最高”批量操作。
 
-### reasoning effort 默认值
+## 安装与首次连接
 
-2.3.0 起支持路由模型的 reasoning effort 默认值。2.4 按模型校验 `minimal`、`low`、`medium`、`high`、`xhigh`、`max`，并在受支持的路径提供 `on/off` 思考开关；并非每个模型都支持这些值。`ultracode` 和 token 预算不属于此功能。
+1. 将本仓库加入插件市场源（GitHub 或你信任的镜像），安装 `custom-api-models`。
+2. 在 WorkBuddy 会话中打开 `/models-settings`，或让助手打开 WorkBuddy 3P 设置面板。
+3. 要保存账号默认值，调用 `models_settings` 的 `{ "action": "connect" }`。它会返回 WorkBuddy 官方 CLI/网页登录地址；请在自己的账号中完成登录。
+4. 调用 `models_settings` 的 `{ "action": "finish-connect" }`。它会验证账号和私有 profile。返回 `accountConnected: true`、`accountCommitted: false` 只表示授权成功；连接本身不切换来源，也不改变路由。
+5. 默认使用 `scope: "account"` 应用设置。只有明确需要当前沙箱高级覆盖时，才使用 `scope: "session"`。
 
-在顶层 `effort` 对象中配置默认值：
+## 账号默认值与同步
 
-```json
-{
-  "effort": {
-    "default": "high",
-    "models": {
-      "main:qwen3.8-max": "xhigh"
-    }
-  }
-}
-```
+- 账号保存通过 WorkBuddy 私有资产/profile 通道完成。账号凭据是官方 Bearer access token + refresh token，不是运行模型 token。它们只属于本人侧的 mode-600 运行时缓存和私有 profile，绝不返回给面板、聊天或公开 URL。
+- 首次私有凭据同步必须由账号所有者明确授权。运行时连接/缓存文件保持 gitignored，不得提交、发布或复制到公开 manifest。
+- `apiKeyEnv`、`apiKeyFile`、`apiKeyUrl` 等仅存在于宿主的引用，会在账号 apply 时私有解析，并且只嵌入账号所有者授权的私有账号包；解析后的值不会返回面板，也不会写入公开视图。
+- 不要手工合并 profile/config 文件，也不要使用手动 `mergeProfile` 流程。请使用 `models_settings` 的 status/apply（带最新 revision）以及账号 connect/finish-connect。
+- 发布 preflight 可能要求确认类型。把准确的 `confirmationTypes` 展示给用户，并在用户明确确认前停止。preflight 不是本地成功，也不是账号成功。只能在用户确认后，用同一逻辑请求和 `confirmedConfirmationTypes` 重试；不要把确认当成上传完成。
+- 只有上传后的读回状态为 `ready`，才报告 `accountCommitted: true`。`publicationPending` 和 `outcomeUnknown` 不是成功。先重新读取状态，再判断是否重试；不要自动再次上传。
+- 上传结果未知或超时会持久记录 `retryBlocked: true`；用 `models_settings`/`models_status` 查清账号状态，不要再次提交同一上传。
+- 服务端没有已验证的 compare-and-swap（CAS）。版本检查和 ready/readback 只能减少部分竞争，跨沙箱并发修改仍可能冲突或丢更新，不能把它描述成原子多文件事务。
+- 如果远端账号资产缺失，保留 last-good 缓存路由；远端缺失不代表这些路由已被撤销。
+- session apply 返回 `localSyncPending`、`stateUnavailable`、partial 或其它未完成状态时，一律视为 pending。先查状态，再决定是否重试；不要自动重发。
+- 账号保存提交后，插件可能返回 `requiresHostRefresh` 或 `requiresModelReselection`。全局账号变更不是当前 host 的瞬时原生模型切换。已有 host 需要升级插件、刷新目录并重新选择模型。
+- 活跃 MCP 会话每 45 秒轮询私有 profile revision，并在 revision 变化时同步账号默认值。同步是最终一致的，宿主休眠、回收或进程重启都可能延迟。
+- 新沙箱会在插件初始化后加载账号私有 profile 数据。已有旧 plugin 必须先升级，升级后重新选择模型。
+- 只读卷不会因为改成账号 scope 就变为可写。`WB3P_CONFIG_JSON` 仍然是由所有者控制的只读来源。
 
-沙箱本地覆盖文件为 `~/.codebuddy/workbuddy-3p.effort.json`，含 `version: 1`，只保存 effort 选择，不保存 API key。生效优先级为：
+## 设置面板、草稿模式与发现
 
-1. 本地 per-model 覆盖
-2. 本地 default
-3. 配置中的 per-model
-4. 配置中的 default
-5. 模型原默认值
+- 原生 MCP Apps 面板通过宿主 bridge 直接应用设置。独立 HTML 产物只是草稿编辑器，不能直接写文件；它生成的 secret-free 指令包含 `scope`、`expectedRevision` 和结构化 patch，必须发回原 chat 后才可能应用。预览成功或复制成功不是保存回执。
+- 公开流程不提供手工 merge 或“全部最高”教程。请按路由设置 effort，或在 `models_effort` 中显式设置模型/默认偏好。
+- 无 bridge 时，独立 HTML 不能执行模型发现或连通探针。**拉取模型**和**测试模型连通性**按钮只能按草稿模式说明：先生成草稿，发回原 chat，在原会话应用 provider，再调用 `discover` / `probe`，或手动导入模型 ID 并声明能力。
+- bridge 可用时，`discover` 调用供应商的 `GET /models`；不支持发现时仍可手动导入。`probe` 必须提供明确模型和 `allowBillable: true`。
+- 不要把探针的 HTTP 200、面板预览、preflight 或本地写入当成账号成功。`runtimeVerified: false` 始终只代表磁盘/配置证据。
 
-`models_effort` 支持 `{ action: "set" | "reset", scope: "default" | "model" | "all", level?, model? }` 和 `{ action: "status", model? }`。`status` 只接受可选 `model`，不接受 `scope` 或 `level`。未指定模型时，`set` 默认使用 `scope: "default"`。指定单模型时，传 `scope: "model"` 和 `model: "<provider>:<upstream-model>"`；唯一官方别名或 upstream ID 也可能解析成功，但建议始终使用完整的 `provider:upstream-model`。`reset` 配合 `scope: "all"` 会删除所有本地覆盖；配合 `scope: "model"` 会删除该模型的本地覆盖，再回落到剩余来源，但不保证回到 preset 原值。
+## 路由、凭据与参数优先级
 
-请求的档位会按模型能力元数据校验。默认/全局档位会跳过不支持的模型并列明；单模型档位不支持时会拒绝。本文不提供固定的 provider 支持表，因为支持情况取决于模型和配置；应使用 `models_effort` status 查看当前配置集，不要据此推断整个 provider 的能力。
+- `3p` 是默认的高级参数优先级。适配器运行在目标云端沙箱内，只改变上游路由 model ID 和用户 effort，不转换请求内容、工具、图片、流式格式或 SSE 协议；供应商必须接受宿主使用的 Chat Completions 形状。
+- 原供应商 key 保持私有。适配器从 mode-600 私有运行时状态读取，只在发往上游的 Authorization 请求中使用。官方模式对代理转发 fail closed，不发送第三方流量。
+- `native` 会关闭 3P 强制参数，允许宿主/会话覆盖生效；当显式路由绑定需要 model ID 映射时，仍可能使用 adapter，因此不能一概承诺直连。
+- 输入 CTX 和 effort 都是宿主元数据/偏好，不证明上游容量或实际请求行为。本文不声明手机真机验收，也不声明上下文压缩已验证。
 
-这些值是模型默认值。`native` 优先级允许会话/用户覆盖；`3p` 优先级由适配器强制已声明的供应商参数。官方模式不修改原生全局设置或官方参数；偏好会以 deferred 配置保存。status 只表示配置/磁盘状态，不证明实际请求采用该档位（`runtimeVerified: false`）。宿主重新加载后可能还需重选模型。
+实现细节见 [参数优先级与回环契约](docs/parameter-priority.md)。这是高级参考；公开面板仍以显式路由优先。
 
-本地 effort 设置只持久化到当前沙箱，不会自动同步到账号。若要让新沙箱使用相同默认值，应把 `effort` 放入账号私有 profile 的 `config`，再打包并上传该 profile；不要把 API key 或 profile 放到公网。手机端共用云端机制，但尚未进行真机验收。
+## 通用配置示例
 
-**宿主保留旧元数据时需刷新并重选。** 2026-10-01 曾有会话在官方目录刷新后实际发出 `xhigh`；但 2026-10-02 最新 2.4 云端测试仍在保存 `xhigh` 后发出 `medium`，刷新接口的 HTTP 202 只证明已接收请求。因此 2.5 增加明确的 `3p` 参数优先级。历史成功、刷新回执、磁盘状态或正常回复均不能代替本次参数证据；2.5 生产网页链路和手机真机仍须独立验收。
-
-工具返回的 `profileConfigPatch.effort` 不含密钥，可用于**替换**私有配置中完整的 `effort` 对象；不要与旧 `effort.models` 逐字段合并，否则可能改变覆盖优先级。
-
-### API key 解析顺序
-
-使用第一个非空值：
-
-1. `providers.<name>.apiKey`
-2. `providers.<name>.apiKeyEnv` 指向的环境变量
-3. `WB3P_<NORMALIZED_PROVIDER>_API_KEY`，provider 名称中的非字母数字字符会替换为 `_`
-4. 仅默认 provider：`WB3P_API_KEY` 或插件选项 `API_KEY`
-5. `providers.<name>.apiKeyFile`
-6. `<config-dir>/workbuddy-3p.secrets/<provider-name>`
-7. 仅默认 provider：`WB3P_API_KEY_FILE`
-8. `providers.<name>.apiKeyUrl`；默认 provider 还可使用 `WB3P_API_KEY_URL`
-9. 上一次同步为同名 provider 且同一规范化 chat-completions URL 保存的 key。不会跨 provider 借用 key。
-10. 未找到。没有 key 的路由不会启用，对应模型继续使用官方后端。
-
-`apiKeyUrl` 只接受 HTTPS，并要求响应 JSON 中存在 `apiKey` 字段。非 HTTPS 地址会报错。它应指向私有地址。URL 请求超时为 8 秒。
-
-## 预设
-
-没有默认 preset。只有通过 `PRESET` 或 `providers.<name>.preset` 选择时才会使用 preset。
-
-### 百炼
-
-`bailian` preset 使用：
-
-```text
-https://dashscope.aliyuncs.com/compatible-mode/v1
-```
-
-映射表：
-
-| 官方 ID | 百炼模型 ID |
-| --- | --- |
-| `deepseek-v4.1-flash` | `deepseek-v4.1-flash` |
-| `deepseek-v4-pro` | `deepseek-v4-pro` |
-| `deepseek-v4-flash` | `deepseek-v4-flash` |
-| `deepseek-v3-2-volc` | `deepseek-v3.2` |
-| `glm-5.3` | `glm-5.3` |
-| `glm-5.3-flashx` | `glm-5.3` |
-| `glm-5.2` | `glm-5.2` |
-| `glm-5.1` | `glm-5.1` |
-| `glm-5.0` | `glm-5` |
-| `glm-5.0-turbo` | `glm-5` |
-| `glm-4.7` | `glm-4.7` |
-| `glm-4.6` | `glm-4.7` |
-| `kimi-k3-1` | `kimi-k3` |
-| `kimi-k3-2` | `kimi-k3` |
-| `kimi-k3` | `kimi-k3` |
-| `kimi-k2.8-preview` | `kimi/kimi-k2.8-preview` |
-| `kimi-k2.7` | `kimi-k2.7-code` |
-| `kimi-k2.6` | `kimi-k2.6` |
-| `kimi-k2.5` | `kimi-k2.5` |
-| `kimi-k2-thinking` | `kimi-k2-thinking` |
-| `minimax-m3` | `MiniMax/MiniMax-M3` |
-| `minimax-m3-pay` | `MiniMax/MiniMax-M3` |
-| `minimax-m2.7` | `MiniMax/MiniMax-M2.7` |
-| `minimax-m2.5` | `MiniMax/MiniMax-M2.5` |
-
-`glm-5v-turbo` 和 `glm-5.3-flash` 被列为不支持的模型，默认保留官方后端。下面的手动映射只是示例，不设为公共默认；只有接受模型替换时才使用：
+示例使用保留域 `example.invalid` 和环境变量引用，仅作说明，不代表任何供应商或模型推荐。
 
 ```json
 {
   "providers": {
-    "main": {
-      "preset": "bailian",
-      "apiKeyEnv": "BAILIAN_API_KEY"
+    "example": {
+      "label": "Example",
+      "baseUrl": "https://api.example.invalid/v1",
+      "apiKeyEnv": "MODEL_API_KEY",
+      "extraModels": ["upstream-model-id"],
+      "models": {
+        "upstream-model-id": {
+          "maxInputTokens": 32768,
+          "maxOutputTokens": 4096,
+          "supportsToolCall": true,
+          "supportsImages": false,
+          "supportsReasoning": true,
+          "reasoning": {
+            "supportedEfforts": ["low", "medium", "high"],
+            "defaultEffort": "medium"
+          }
+        }
+      }
     }
   },
+  "mode": "explicit",
   "routes": {
-    "glm-5v-turbo": "qwen3.8-max",
-    "glm-5.3-flash": "qwen3.8-flash"
+    "official-slot": {
+      "provider": "example",
+      "model": "upstream-model-id",
+      "effort": "high"
+    }
   }
 }
 ```
 
-欢迎提交新 preset 的 PR。
+请为自己的模型手动填写 CTX；示例中的 `32768` 只是占位。在本地源配置中，`apiKeyEnv` 只是引用；账号 apply 时插件会私有解析，并只把结果嵌入账号所有者授权的私有账号包，绝不返回或公开发布。
 
-## 命令与 MCP 工具
+## 常用 MCP 与 CLI 入口
 
-在插件根目录运行：
+MCP 工具：
+
+| 工具 | 用途 |
+| --- | --- |
+| `models_settings` | `status`、`panel`、`apply`、`discover`、`probe`、`connect`、`finish-connect`。`apply` 默认 `scope: "account"`；`scope: "session"` 只能作为显式高级覆盖。`connect`/`finish-connect` 只授权，不切换来源。 |
+| `models_status` | 报告配置/磁盘状态、pending/retry-blocked 发布状态和 last-good 缓存状态。`runtimeVerified: false` 不证明真实流量。 |
+| `models_switch` | 切换 `official`、`third-party` 或 `default`；`scope` 默认 `account`，`scope: "session"` 必须显式选择，作为本地覆盖。 |
+| `models_resync` / `models_doctor` | 重新读取配置 / 对计划模型发小额请求。doctor 可能产生供应商费用。 |
+| `models_effort` | 查看或设置 effort 偏好。`scope` 仍为 `default`/`model`/`all`；`saveScope` 默认 `account`，`saveScope: "session"` 必须显式选择。路由级 effort 优先于模型/default effort。 |
+
+常用插件命令：
 
 ```bash
 cd plugins/custom-api-models
-
-node scripts/sync-models.cjs
 node scripts/sync-models.cjs --dry-run
 node scripts/sync-models.cjs --doctor
 node scripts/sync-models.cjs --official
 node scripts/sync-models.cjs --third-party
-node scripts/sync-models.cjs --switch clear
 node scripts/sync-models.cjs --status
 node scripts/sync-models.cjs --uninstall
-node scripts/sync-models.cjs --quiet
-node scripts/sync-models.cjs --effort-status
-node scripts/sync-models.cjs --effort-status --model main:qwen3.8-max
-node scripts/sync-models.cjs --effort high
-node scripts/sync-models.cjs --effort xhigh --model main:qwen3.8-max
-node scripts/sync-models.cjs --effort-reset --model main:qwen3.8-max
-node scripts/sync-models.cjs --effort-reset --all
 ```
 
-| 选项 | 行为 |
-| --- | --- |
-| 无 | 应用当前配置并写入管理条目。 |
-| `--dry-run` | 输出路由计划，不写文件。 |
-| `--doctor` | `official` 模式直接跳过，不会请求第三方；高优先级 `official` 开关甚至不会加载损坏的 provider/profile 配置。`third-party` 模式会对计划中的每个模型发送一次小额计费测试请求，可能消耗额度。只返回 HTTP 状态和耗时，不返回响应体或 key。 |
-| `--official` / `--third-party` | 为当前沙箱写入开关文件并同步。 |
-| `--switch clear` | 删除当前沙箱的开关文件，并回到较低优先级的来源。 |
-| `--status` | 返回 `configuredMode`、`parameterPriority`/`parameterAdapter`、来源、`modelsJsonActive`/`active`（磁盘条目）、`runtimeVerified`（恒为 `false`）和最近错误；provider endpoint 只报告 `host`。 |
-| `--uninstall` | 删除归属记录和生成的 allowlist 条目，保留其它用户模型。state 损坏，或存在归属标记但 state 丢失时拒绝改动。 |
-| `--quiet` | 不输出正常 JSON，错误仍写入 stderr。思考强度命令失败时保留非零退出码；其它命令按 `SessionStart` hook 的兼容行为返回 `0`。 |
-| `--effort-status [--model ...]` | 返回全部已配置模型的 effort 配置和实际来源，或只返回指定模型。这里只是配置/磁盘状态，不证明实际请求已采用该值（`runtimeVerified: false`）。 |
-| `--effort <level> [--model ...]` | 设置本地默认档位；带 `--model` 时设置本地单模型覆盖。支持 `minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`；对不支持的默认/全局目标会跳过并列明，对不支持的单个模型会拒绝。 |
-| `--effort-reset [--model ... \| --all]` | 删除指定模型的本地覆盖；带 `--all` 时删除所有本地覆盖。单模型重置会依次回落到本地默认、配置 per-model、配置 default 和模型原默认值，不保证回到 preset 原值。 |
-
-stdio MCP server 提供：
-
-| 工具 | 行为 |
-| --- | --- |
-| `models_status` | 返回 `configuredMode`、`parameterPriority`/`parameterAdapter`、来源、磁盘 `modelsJsonActive`/`active`、`runtimeVerified`（恒为 `false`）、管理条目数和最近错误；provider endpoint 只报告 `host`。 |
-| `models_switch` | 将当前沙箱切到 `official` 或 `third-party`，或用 `default` 清除开关。 |
-| `models_resync` | 重新读取配置并改写 `models.json`。 |
-| `models_doctor` | `official` 模式跳过且不请求第三方；`third-party` 模式对计划中的每个模型发送一次小额计费请求，并报告 HTTP 状态和耗时。 |
-| `models_effort` | 查看或修改 reasoning effort 默认值。参数为 `{action:"set"\|"reset", scope:"default"\|"model"\|"all", level?, model?}` 或 `{action:"status", model?}`。未指定模型时，`set` 默认使用 `scope:"default"`。指定单模型时使用 `provider:upstream-model`；唯一官方别名或 upstream ID 也可能解析，但建议使用完整写法。 |
-
-可用插件 `commands` 目录中的 `/models-effort` 调用 `models_effort`。status 指令不得猜测当前选中的模型：应使用用户明确给出的模型，或先列出已配置能力。set/reset 必须严格按用户明确给出的模型和档位执行，不要替用户选择档位。
-
-### 同步摘要
-
-| 字段 | 含义 |
-| --- | --- |
-| `ok` | 只有没有 warning 时才为 `true`。 |
-| `partial` | 规划阶段出现 warning，但仍有至少一个模型激活。 |
-| `active` | 当前计划或磁盘中至少有一个第三方模型条目（取决于命令）；不代表真实流量已验证。 |
-| `switch` | 解析后的模式：`official` 或 `third-party`。 |
-| `switchFrom` | 来源：`switch file`、`WB3P_ENABLED`、`plugin option ENABLED`、`config` 或 `default`。 |
-| `warnings` | 非致命问题，例如 provider 缺 key、上游模型 ID 冲突或用户模型被替换。 |
-
-`models_status` 只报告配置和磁盘状态：`configuredMode` 是配置意图，`modelsJsonActive`/`active` 是磁盘 `models.json` 中的第三方条目，`runtimeVerified` 恒为 `false`。不能凭此声称真实流量已切换。
-
-正常同步还会把配置错误写入 `~/.codebuddy/workbuddy-3p.last-error.json`，`models_status` 可见该错误。配置校验失败会拒绝本次更新并保留 last-good `models.json`，不会自动切到 `official`。典型情况包括：`WB3P_CONFIG_JSON`、`ROUTES` 或配置文件 JSON 损坏，`mode` 非法，`providers` 不是非空对象。高优先级 `official` 开关可按上文绕过损坏配置，但仍依赖完整 ownership state。
+公开流程优先使用 `/models-settings`；窄操作使用 `/models-status`、`/models-official`、`/models-third-party` 或 `/models-effort`。
 
 ## 安全
 
-- 不要把 API key 提交到仓库，也不要把它放在公开 URL。
-- 在支持 POSIX 权限的平台上，对 `models.json`、`workbuddy-3p.json`、密钥文件和备份执行 `chmod 600`。同步脚本会以 `600` 写入 `models.json`；state、switch 和 last-error 文件的原子写入也请求 `600`。
-- `baseUrl` 必须使用 HTTPS。仅 `localhost`、`127.0.0.1`、`::1` 或 `allowInsecureHttp: true` 时允许 HTTP。URL 不得含 userinfo、query 或 fragment。
-- `apiKeyUrl` 必须使用 HTTPS。代码无法判断地址是否私有，所以应把它放在自己控制的私有主机上。
-- `models_status` 和公开同步摘要不会返回完整 `baseUrl`；需要报告 endpoint 时只返回 `host`。
-- 官方模型完成路由后，提示词和响应会发往配置的第三方 API。
-- 已路由槽位在 WorkBuddy 菜单中仍可能显示官方模型名，实际请求发往第三方 provider。
-- 第三方 API 的使用和计费由你承担。
-- 这是非官方插件。WorkBuddy 或 CodeBuddy Code 更新后，模型文件格式或插件行为变化可能导致失效。
+- 不要把 API key、私有 profile、账号 token 或凭据文件提交、粘贴、打印或发布。
+- 使用环境变量引用或私有文件。POSIX 私有运行时文件和备份应为 mode `600`，目录应为 `700`。Windows 的 `chmod` 不等于 NTFS ACL。
+- 除 loopback 开发 endpoint 外必须使用 HTTPS。`baseUrl` 不得包含 userinfo、query 或 fragment。
+- 账号同步凭据只能放在本人私有运行时和私有 profile 中。私有 profile 不是加密保险库；能读取账号/沙箱的人都能读取其内容。
+- 首次私有凭据同步必须由所有者授权。运行时连接/缓存文件保持 gitignored，不得放入公开 manifest、聊天或报告。
+- 槽位一旦路由，提示词和响应会发往配置的第三方供应商。路由和供应商费用由你承担。
 
 ## 已知限制
 
-- 云沙箱是否执行用户插件取决于平台同步。新会话才会生效；已经运行的会话可能需要新建会话。
-- 路由后的官方槽位在菜单中仍显示官方名称。
-- 在 `same-name` 模式下，如果路由到上游不存在的同名模型，会返回上游错误。可对当前配置生成的计划运行 `--doctor`。
-- 同一上游模型 ID 只能属于一个 provider，与 URL 是否相同无关。冲突的路由或额外模型会被跳过并输出 warning；被跳过的官方 alias 会继续作为官方模型可选，除非另有路由处理它。
-- 2026-09 实测的云沙箱（中国大陆区域）无法访问 `github.com`（TLS 被重置）：账号接口能添加 GitHub 来源，但沙箱内 `git clone` 会失败。GitHub 不可访问时使用维护者镜像 `https://cnb.cool/AlgernonYin/workbuddy-3P`（与 GitHub `main` 同步）。
-- 新会话可能运行在全新的沙箱。实测云端网页无法保存插件选项，自定义 MCP 保存也会失败；应以账号私有技能包为主方案。它不是加密保险库：`SKILL.md` 无 key，`workbuddy-3p.profile.json` 可能含配置和嵌入 key。已安装技能和用户目录必须可信。
+- 保存设置不是真实请求回执。通常需要宿主刷新目录、重新选择模型或新建会话。
+- 账号 scope 更新的是新会话/账号侧默认值，不会瞬时切换当前 host 的原生已选模型。
+- 服务端没有已验证 CAS；跨沙箱并发修改可能冲突或丢更新，revision 检查和 readback 只是保护措施，不是原子多文件事务。
+- 上传未决或 pending 时处于 retry-blocked。先查 `models_settings`/`models_status`，不要自动重发。
+- 远端 profile 缺失时保留 last-good 缓存路由，不会自动撤销。
+- 只读卷仍然只读；插件不会把平台拥有的只读挂载改成可写。
+- 模型列表发现可能不被支持。未知能力保持未知；插件不会凭空补 128K CTX、工具、图片或 effort 支持。
+- 输入元数据是宿主侧输入上限，不是供应商容量或压缩证据。
+- endpoint 探针只检查一个小 completion 请求。HTTP 200 且没有 marker 不算完成。
+- 协议翻译不属于范围；请配置 OpenAI Chat Completions 兼容 endpoint。
+- 手机真机行为尚未验收。手机端应视为共用云端机制，而不是已完成设备验证。
+- 已有旧 plugin 必须先升级并重新选择模型，才能消费当前账号 profile。
 
-- `models_status` 不能证明真实流量；`runtimeVerified` 恒为 `false`。需要确认实际路由时，应做真实请求或观察宿主行为。
-
-## 卸载与回滚
-
-用 `models_switch`、`/models-official` 或 `--official` 切到 `official`，可在不卸载插件的情况下恢复插件管理的模型。若要移除插件，在 WorkBuddy 中卸载 `custom-api-models`，然后选择一种方式：
-
-```bash
-node scripts/sync-models.cjs --uninstall
-```
-
-或恢复第一次修改前的备份：
-
-```text
-~/.codebuddy/models.json.bak-workbuddy-3p
-```
-
-`--uninstall` 只删除 `workbuddy-3p.state.json` 中记录的条目，其它用户模型会保留。state 损坏，或存在 2.2.2 归属标记但 state 丢失时拒绝改动。旧版没有标记的遗留条目无法自动识别；请恢复已知良好的备份，不要盲删。
-
-## 测试
-
-在仓库根目录运行：
-
-```bash
-node --test --test-concurrency=2 tests/*.test.cjs
-```
+**2.5.1 历史兼容：** 旧官方目录 fallback 行为单独见 [官方切换兼容说明](docs/official-switch-compatibility.md)。它是历史兼容，不是当前公开默认。
 
 ## License
 

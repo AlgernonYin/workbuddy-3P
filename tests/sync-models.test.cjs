@@ -80,6 +80,14 @@ const modelsPath = (dir) => path.join(dir, "models.json");
 const statePath = (dir) => path.join(dir, "workbuddy-3p.state.json");
 const configPath = (dir) => path.join(dir, "workbuddy-3p.json");
 
+function writeSameNameConfig(dir, providerName, provider) {
+  writeJson(configPath(dir), {
+    default: providerName,
+    mode: "same-name",
+    providers: { [providerName]: provider },
+  });
+}
+
 function findModel(out, id) {
   return (out.models || []).find((model) => model && model.id === id) || null;
 }
@@ -108,7 +116,7 @@ test("1. no config and no key does not produce managed models", () => {
   }
 });
 
-test("2. WB3P_BASE_URL plus key routes every official id as same-name", () => {
+test("2. explicit same-name config routes every official id as same-name", () => {
   const variants = [
     "https://api.example.invalid/v1",
     "https://api.example.invalid/v1/",
@@ -119,7 +127,8 @@ test("2. WB3P_BASE_URL plus key routes every official id as same-name", () => {
   for (const baseUrl of variants) {
     const dir = tempDir();
     try {
-      const result = runOk(dir, { WB3P_BASE_URL: baseUrl, WB3P_API_KEY: KEY });
+      writeSameNameConfig(dir, "custom", { baseUrl, apiKey: KEY });
+      const result = runOk(dir);
       const summary = jsonOut(result);
       const out = readJson(modelsPath(dir));
       assert.ok(out, "models.json was not written");
@@ -156,10 +165,11 @@ test("2. WB3P_BASE_URL plus key routes every official id as same-name", () => {
   }
 });
 
-test("3. bailian preset maps aliases, merges Kimi ids, and keeps unsupported official models", () => {
+test("3. explicit bailian preset maps aliases, merges Kimi ids, and keeps unsupported official models", () => {
   const dir = tempDir();
   try {
-    const result = runOk(dir, { WB3P_PRESET: "bailian", WB3P_API_KEY: KEY });
+    writeSameNameConfig(dir, "bailian", { preset: "bailian", apiKey: KEY });
+    const result = runOk(dir);
     const summary = jsonOut(result);
     const out = readJson(modelsPath(dir));
     assert.ok(out, "models.json was not written");
@@ -261,16 +271,15 @@ test("5. user model survives sync and uninstall", () => {
       models: [{ id: "my-own", url: "https://user.example.invalid/chat/completions", apiKey: "sk-test-user" }],
       availableModels: ["custom-local:my-own"],
     });
-    const env = { WB3P_BASE_URL: "https://managed.example.invalid/v1", WB3P_API_KEY: KEY };
-
-    runOk(dir, env);
+    writeSameNameConfig(dir, "managed", { baseUrl: "https://managed.example.invalid/v1", apiKey: KEY });
+    runOk(dir);
     let out = readJson(modelsPath(dir));
     assert.ok(out, "models.json was not written by sync");
     assert.ok(findModel(out, "my-own"), "user model disappeared during sync");
     assert.ok(findModel(out, "deepseek-v4.1-flash"), "managed model missing during sync");
     assert.ok((out.availableModels || []).includes("custom-local:my-own"), "user availableModels entry disappeared during sync");
 
-    runOk(dir, env, ["--uninstall"]);
+    runOk(dir, {}, ["--uninstall"]);
     out = readJson(modelsPath(dir));
     assert.ok(out, "models.json was not written by uninstall");
     assert.deepEqual((out.models || []).map((model) => model.id), ["my-own"], "uninstall removed the wrong models");
@@ -282,14 +291,15 @@ test("5. user model survives sync and uninstall", () => {
 });
 
 test("6. sync is idempotent and backs up only an existing models.json", () => {
-  const env = { WB3P_BASE_URL: "https://managed.example.invalid/v1", WB3P_API_KEY: KEY };
+  const baseUrl = "https://managed.example.invalid/v1";
   const absentDir = tempDir();
+  writeSameNameConfig(absentDir, "managed", { baseUrl, apiKey: KEY });
   try {
-    const first = jsonOut(runOk(absentDir, env));
+    const first = jsonOut(runOk(absentDir));
     assert.equal(first.changed, true, "first sync should report a change");
     assert.ok(!fs.existsSync(modelsPath(absentDir) + ".bak-workbuddy-3p"), "absent models.json must not create a backup");
 
-    const second = jsonOut(runOk(absentDir, env));
+    const second = jsonOut(runOk(absentDir));
     assert.equal(second.changed, false, "second sync should be unchanged");
     assert.ok(!fs.existsSync(modelsPath(absentDir) + ".bak-workbuddy-3p"), "unchanged second sync must not create a backup");
   } finally {
@@ -302,13 +312,14 @@ test("6. sync is idempotent and backs up only an existing models.json", () => {
       models: [{ id: "my-own", url: "https://user.example.invalid/chat/completions" }],
       availableModels: ["custom-local:my-own"],
     });
+    writeSameNameConfig(existingDir, "managed", { baseUrl, apiKey: KEY });
     const before = fs.readFileSync(modelsPath(existingDir), "utf8");
-    const first = jsonOut(runOk(existingDir, env));
+    const first = jsonOut(runOk(existingDir));
     assert.equal(first.changed, true, "first sync over an existing file should report a change");
     assert.ok(fs.existsSync(modelsPath(existingDir) + ".bak-workbuddy-3p"), "existing models.json was not backed up");
     assert.equal(fs.readFileSync(modelsPath(existingDir) + ".bak-workbuddy-3p", "utf8"), before, "backup does not match the original file");
 
-    const second = jsonOut(runOk(existingDir, env));
+    const second = jsonOut(runOk(existingDir));
     assert.equal(second.changed, false, "second sync over an existing file should be unchanged");
   } finally {
     rmDir(existingDir);
@@ -318,6 +329,7 @@ test("6. sync is idempotent and backs up only an existing models.json", () => {
 test("7. enabled:false clears routes and retains reversible official catalog ownership", () => {
   const cfg = {
     default: "main",
+    mode: "same-name",
     providers: { main: { baseUrl: "https://managed.example.invalid/v1", apiKey: KEY } },
   };
   const disabledDir = tempDir();
@@ -383,7 +395,7 @@ test("9. key source priority follows provider, env, named env, default env, file
       const env = { ...envExtra };
       if (env.WB3P_API_KEY_FILE === "$FILE") env.WB3P_API_KEY_FILE = defaultKeyFile;
 
-      writeJson(configPath(dir), { default: "p", providers: { p: provider } });
+      writeJson(configPath(dir), { default: "p", mode: "same-name", providers: { p: provider } });
       runOk(dir, env);
 
       const out = readJson(modelsPath(dir));
@@ -452,23 +464,27 @@ test("10. an illegal preset name fails without writing files", () => {
   }
 });
 
-test("11. env provider naming and label fallback follow provider, preset, then provider name", () => {
+test("11. env provider naming and label fallback follow explicit env routes", () => {
   const envDir = tempDir();
   try {
-    const result = runOk(envDir, { WB3P_BASE_URL: "https://custom.example.invalid/v1", WB3P_API_KEY: KEY });
+    const routes = { "glm-5.0": "custom:glm-5.0" };
+    const result = runOk(envDir, { WB3P_BASE_URL: "https://custom.example.invalid/v1", WB3P_API_KEY: KEY, WB3P_ROUTES: JSON.stringify(routes) });
     const summary = jsonOut(result);
     assert.equal(summary.providers[0].name, "custom", "env without a preset should default the provider name to custom");
     assert.equal(summary.routed["glm-5.0"], "custom / glm-5.0", "env without a label should fall back to the provider name");
+    assert.deepEqual(Object.keys(summary.routed), ["glm-5.0"], "env base URL alone must not infer same-name routes");
   } finally {
     rmDir(envDir);
   }
 
   const presetDir = tempDir();
   try {
-    const result = runOk(presetDir, { WB3P_PRESET: "bailian", WB3P_API_KEY: KEY });
+    const routes = { "glm-5.0": "bailian:glm-5" };
+    const result = runOk(presetDir, { WB3P_PRESET: "bailian", WB3P_API_KEY: KEY, WB3P_ROUTES: JSON.stringify(routes) });
     const summary = jsonOut(result);
     assert.equal(summary.providers[0].name, "bailian", "env preset should become the provider name");
     assert.equal(summary.routed["glm-5.0"], "百炼 Bailian / glm-5", "preset label should be used before the provider name");
+    assert.deepEqual(Object.keys(summary.routed), ["glm-5.0"], "env preset alone must not infer additional same-name routes");
   } finally {
     rmDir(presetDir);
   }
@@ -477,6 +493,7 @@ test("11. env provider naming and label fallback follow provider, preset, then p
   try {
     writeJson(configPath(presetLabelDir), {
       default: "fallback",
+      mode: "same-name",
       providers: { fallback: { preset: "bailian", apiKey: KEY } },
     });
     const result = runOk(presetLabelDir);
@@ -491,6 +508,7 @@ test("11. env provider naming and label fallback follow provider, preset, then p
   try {
     writeJson(configPath(providerLabelDir), {
       default: "custom-provider",
+      mode: "same-name",
       providers: { "custom-provider": { preset: "bailian", label: "Custom Label", apiKey: KEY } },
     });
     const result = runOk(providerLabelDir);

@@ -24,7 +24,7 @@ test("MCP effort tool lists capability, sets/resets defaults, and rejects bad ar
     ...[{ action: "status" }, { action: "set", scope: "model", model: "p:m", level: "low" },
       { action: "set", model: "p:m", level: "max" }, { action: "status", scope: "default" },
       { action: "reset", scope: "all" }, { action: "status", unknown: true }]
-      .map((args, i) => ({ id: i + 2, method: "tools/call", params: { name: "models_effort", arguments: args } }))];
+      .map((args, i) => ({ id: i + 2, method: "tools/call", params: { name: "models_effort", arguments: args.action==='status'?args:{...args,saveScope:'session'} } }))];
   const p = spawnSync(process.execPath, [path.join(path.dirname(script), "mcp-sync.cjs")], { env: f.env,
     input: calls.map(c => JSON.stringify({ jsonrpc: "2.0", ...c })).join("\n") + "\n", encoding: "utf8" });
   assert.equal(p.status, 0, p.stderr);

@@ -1,12 +1,12 @@
 {
   "name": "custom-api-models",
-  "version": "2.5.1",
-  "description": "Route WorkBuddy / CodeBuddy Code cloud model choices to your own OpenAI-compatible APIs, with an official / third-party switch",
+  "version": "3.0.0",
+  "description": "Candidate 3.0.0; not yet published. Configure explicit OpenAI Chat Completions routes, account defaults, session overrides, and per-route effort for WorkBuddy / CodeBuddy Code.",
   "author": { "name": "AlgernonYin", "url": "https://github.com/AlgernonYin" },
   "homepage": "https://github.com/AlgernonYin/workbuddy-3P",
   "repository": "https://github.com/AlgernonYin/workbuddy-3P",
   "license": "MIT",
-  "keywords": ["workbuddy", "codebuddy", "models", "openai-compatible", "bailian", "dashscope"],
+  "keywords": ["workbuddy", "codebuddy", "models", "openai-compatible", "chat-completions"],
   "hooks": "./hooks/hooks.json",
   "mcpServers": {
     "custom-api-models": {
@@ -15,10 +15,10 @@
     }
   },
   "userConfig": {
-    "ENABLED": { "type": "string", "title": "Model source", "description": "third-party or official. Empty = third-party. Default for new sandboxes; the models_switch tool or /models-official overrides it per sandbox.", "default": "" },
-    "PRESET": { "type": "string", "title": "Preset", "description": "Provider preset, e.g. bailian. Leave empty when BASE_URL is set.", "default": "" },
-    "BASE_URL": { "type": "string", "title": "Base URL", "description": "OpenAI-compatible base URL (https), e.g. https://api.example.com/v1", "default": "" },
-    "API_KEY": { "type": "string", "title": "API key", "description": "API key for the default provider", "sensitive": true, "default": "" },
-    "ROUTES": { "type": "string", "title": "Routes (JSON)", "description": "Optional JSON object: {\"glm-5.3\":\"my-model\",\"kimi-k3\":\"official\"}", "default": "" }
+    "ENABLED": { "type": "string", "title": "Model source", "description": "Legacy fixed-host source override: third-party or official. The public tools default to account scope; models_switch with scope=session is an explicit local override.", "default": "" },
+    "PRESET": { "type": "string", "title": "Preset", "description": "Advanced compatibility preset for an old explicit config. Leave empty for the public explicit-route flow.", "default": "" },
+    "BASE_URL": { "type": "string", "title": "Base URL", "description": "OpenAI Chat Completions-compatible base URL (https). No protocol translation is provided.", "default": "" },
+    "API_KEY": { "type": "string", "title": "API key", "description": "Legacy local credential for a fixed host. Account apply resolves private references into the authorized private account package.", "sensitive": true, "default": "" },
+    "ROUTES": { "type": "string", "title": "Routes (JSON)", "description": "Legacy fixed-host explicit route JSON, e.g. {\"official-slot\":{\"provider\":\"example\",\"model\":\"upstream-model-id\"}}", "default": "" }
   }
 }

@@ -1,7 +1,7 @@
 ---
 description: Configure WorkBuddy models in this sandbox for the official backend (custom-api-models)
 ---
-Call the MCP tool `models_switch` of the `custom-api-models` server with `{"mode": "official"}`, then call `models_status`.
+Call the MCP tool `models_switch` of the `custom-api-models` server with `{"mode":"official","scope":"account"}` by default, then call `models_status`. `scope:"session"` is only an explicit local override and is never used as a silent fallback; if account sync is unavailable, authorize it first or ask, rather than falling back locally.
 Tell the user to reselect an official model before the next message. If the same menu label remains selected, choose a non-routed official model first, then the target. The host can retain a removed `custom-local:` ID and report "no endpoint url configured" until selection changes. The plugin cannot update that in-memory selection. For the smoothest switch, use a non-routed official model such as Hy4 preview while issuing the command.
 Report in one or two short sentences: `configuredMode`, `switchFrom`, and whether managed third-party entries remain in `modelsJsonActive`/`active`. Say `runtimeVerified` is false and this is configured/on-disk state, not proof that live traffic has switched. Never print API keys or full base URLs.
-If the host has not reloaded, reopen the same sandbox/session. A new sandbox follows account defaults; set official there again. Menu labels alone do not prove the route.
+If the host has not reloaded, reopen the same sandbox/session. A new sandbox follows account defaults; set official there again. Menu labels alone do not prove the route. If the result is pending, retry-blocked, partial, or unknown, report it as pending and reconcile with `models_status`; do not automatically resubmit.

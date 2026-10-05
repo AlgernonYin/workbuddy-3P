@@ -414,7 +414,9 @@ async function createParameterProxy(options) {
       if (route === null) throw new RequestError(410);
       validateRoute(route, modelId);
 
-      const outboundBody = route.priority === "3p" ? forceParameters(body, route.model) : body;
+      const selected = route.priority === "3p" ? forceParameters(body, route.model) : body;
+      // Routing changes the model identifier only; protocol, content, tools and SSE remain native.
+      const outboundBody = route.upstreamModel ? { ...selected, model: route.upstreamModel } : selected;
       const outboundBytes = Buffer.from(JSON.stringify(outboundBody), "utf8");
       if (outboundBytes.length > MAX_BODY_BYTES) throw new RequestError(413);
 

@@ -1,20 +1,16 @@
 {
-  "$comment": "Copy to ~/.codebuddy/workbuddy-3p.json (chmod 600). Keys may also live in env vars or separate files.",
-  "default": "bailian",
-  "mode": "same-name",
+  "$comment": "Example only: replace the URL, credential reference, imported model ID and official slot. Unknown capabilities stay omitted. Use chmod 600 for private runtime files.",
+  "mode": "explicit",
   "providers": {
-    "bailian": { "preset": "bailian", "label": "百炼", "apiKeyFile": "/opt/workbuddy-3p/bailian.key" },
-    "openrouter": {
-      "baseUrl": "https://openrouter.ai/api/v1",
-      "apiKeyEnv": "OPENROUTER_API_KEY",
-      "defaults": { "maxInputTokens": 200000, "maxOutputTokens": 32768, "supportsToolCall": true, "supportsImages": true }
+    "custom": {
+      "baseUrl": "https://api.example.com/v1",
+      "apiKeyEnv": "MY_API_KEY",
+      "extraModels": ["your-model-id"],
+      "models": { "your-model-id": {} }
     }
   },
   "routes": {
-    "glm-5v-turbo": "qwen3.8-max",
-    "glm-5.3-flash": "qwen3.8-flash",
-    "kimi-k3": "openrouter:moonshotai/kimi-k3",
-    "minimax-m2.5": "official"
+    "your-workbuddy-model-slot": { "provider": "custom", "model": "your-model-id" }
   },
   "keepOfficial": []
 }
