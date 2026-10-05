@@ -18,27 +18,80 @@ module.exports = function create(core) {
   // exposing a deterministic digest usable to guess a low-entropy proxy token.
   const revisionKey = crypto.randomBytes(32);
   const revision = v => crypto.createHmac("sha256", revisionKey).update(v).digest("hex");
+  function baselineFor(p) {
+    if (typeof core.accountBaseline !== "function") return null;
+    const baseline = core.accountBaseline(p);
+    if (baseline === null || baseline === undefined) return null;
+    if (!object(baseline) || !object(baseline.cfg)) reject("invalid published account baseline");
+    if (baseline.connectionOnly === true) return null;
+    if (typeof baseline.from === "string" && fs.existsSync(baseline.from)) {
+      try { if (json(baseline.from)?.connectionOnly === true) return null; } catch {}
+    }
+    return baseline;
+  }
+  function sourceKind(from) {
+    if (!from || from === "none") return "none";
+    return from === "env" || from === "$WB3P_CONFIG_JSON" ? "environment" :
+      from.endsWith("workbuddy-3p.profile.json") ? "private-profile" :
+      from.endsWith("workbuddy-3p.account-cache.json") ? "account" : "file";
+  }
+  const SWITCH_OFF = new Set(["official", "off", "0", "false", "no", "disabled"]);
+  const SWITCH_ON = new Set(["third-party", "thirdparty", "3p", "on", "1", "true", "yes", "enabled"]);
+  function configuredMode(cfg, fallback = "third-party") {
+    const value = cfg?.enabled;
+    if (value === undefined || value === null || value === "") return fallback;
+    if (typeof value === "boolean") return value ? "third-party" : "official";
+    const normalized = String(value).trim().toLowerCase();
+    if (SWITCH_OFF.has(normalized)) return "official";
+    if (SWITCH_ON.has(normalized)) return "third-party";
+    reject("invalid account baseline model source");
+  }
+  function accountEffort(value) {
+    const out = clone(value || {});
+    delete out.version;
+    return out;
+  }
+  function mergeAccountEffort(config, local) {
+    const out = accountEffort(config);
+    if (local.default !== undefined) out.default = local.default;
+    const models = local.default !== undefined ? (local.models || {}) : { ...(out.models || {}), ...(local.models || {}) };
+    out.models = { ...models };
+    return out;
+  }
   function snapshot(p) {
+    const baseline = baselineFor(p);
     const { cfg, from } = core.loadConfig(p.dir);
     const raw = from && !["none", "env", "$WB3P_CONFIG_JSON"].includes(from) ? bytes(from) : JSON.stringify(cfg);
-    const files = Object.fromEntries(["models", "state", "effort", "context", "switch", "parameters"].map(k => [k, bytes(p[k])]));
+    const baselineRaw = baseline ? (baseline.from && !["none", "env", "$WB3P_CONFIG_JSON"].includes(baseline.from)
+      ? (bytes(baseline.from) ?? JSON.stringify(baseline.cfg)) : JSON.stringify(baseline.cfg)) : null;
+    const files = Object.fromEntries(["models", "state", "effort", "context", "switch", "parameters", "scope"].map(k => [k, bytes(p[k] || path.join(p.dir, "workbuddy-3p.scope.json"))]));
     const environment = Object.fromEntries(Object.entries(process.env).filter(([k]) => /^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)));
-    return { cfg, from, raw, files, revision: revision(JSON.stringify([from, raw, files, core.resolveSwitch(p.dir, cfg), environment, core.presetFingerprint()])) };
+    return { cfg, from, raw, files, baseline, revision: revision(JSON.stringify([from, raw, baseline?.from || null, baselineRaw, files, core.resolveSwitch(p.dir, cfg), environment, core.presetFingerprint()])) };
   }
-  async function viewUnlocked(p) {
-    const snap = snapshot(p), cfg = snap.cfg;
-    const sw = core.resolveSwitch(p.dir, cfg);
-    const local = core.readEffort(p), ctx = core.readContext(p);
+  async function viewUnlocked(p, options = {}) {
+    const scope = options?.scope || "account";
+    if (!["account", "session"].includes(scope)) reject("invalid settings scope");
+    const snap = snapshot(p);
+    // Account editing must never implicitly promote session-only preferences.
+    const accountView = scope === "account" && typeof core.accountBaseline === "function";
+    const cfg = accountView ? clone(snap.baseline?.cfg || { mode: "explicit", enabled: "official", providers: {} }) : snap.cfg;
+    if (accountView) cfg.effort = accountEffort(cfg.effort);
+    const from = accountView ? (snap.baseline?.from || "none") : snap.from;
+    const sw = accountView ? { mode: configuredMode(cfg) } : core.resolveSwitch(p.dir, cfg);
+    const local = accountView ? { version: 1 } : core.readEffort(p);
+    const ctx = accountView ? clone(cfg?.context || { version: 1 }) : core.readContext(p);
+    const parameters = accountView ? { version: 1, priority: cfg?.parameterPriority || "3p" } : core.readParameters(p);
+    if (!["3p", "native"].includes(parameters.priority)) reject("invalid parameter priority");
     const plan = cfg ? await core.buildPlan(clone(cfg), p.dir, { providers: {}, keys: {} },
-      { metadataOnly: true, preferences: local, contextPreferences: ctx }) : null;
+      { metadataOnly: true, preferences: local, contextPreferences: ctx, parameterPriority: parameters.priority }) : null;
     const state = {
       ok: true, revision: snap.revision, configuredMode: sw.mode, runtimeVerified: false,
-      scope: "account", accountSync: core.accountMeta(),
-      sourceKind: !cfg ? "none" : snap.from === "env" || snap.from === "$WB3P_CONFIG_JSON" ? "environment" :
-        snap.from.endsWith("workbuddy-3p.profile.json") ? "private-profile" : snap.from.endsWith("workbuddy-3p.account-cache.json") ? "account" : "file",
-      readOnly: snap.from === "$WB3P_CONFIG_JSON", defaultProvider: cfg?.default || Object.keys(cfg?.providers || {})[0] || "",
+      scope, accountSync: core.accountMeta(),
+      hasAccountBaseline: !!snap.baseline, canImportSession: typeof core.accountBaseline === "function" && !snap.baseline,
+      sourceKind: sourceKind(from),
+      readOnly: from === "$WB3P_CONFIG_JSON", defaultProvider: cfg?.default || Object.keys(cfg?.providers || {})[0] || "",
       routingMode: cfg?.mode || "explicit",
-      parameterPriority: core.readParameters(p).priority,
+      parameterPriority: parameters.priority,
       providers: Object.entries(cfg?.providers || {}).map(([id, v]) => ({ id, label: v.label || "", preset: v.preset || "",
         protocol: providerApi.normalizeProtocol(v.protocol || "openai-chat"), models: imported.safeModels(Object.fromEntries(
           [...new Set([...(v.extraModels||[]),...Object.keys(v.models||{}),...(plan?.models||[]).filter(m=>plan.owner.get(m.id)===id).map(m=>m.workbuddy3pBinding?.model||m.id)])]
@@ -206,7 +259,7 @@ module.exports = function create(core) {
     let cleanupWarning;
     try { fs.rmSync(p.lastError, { force: true }); } catch { cleanupWarning = "settings committed; stale error record remains"; }
     let view;
-    try { view = await viewUnlocked(p); }
+    try { view = await viewUnlocked(p, { scope: "session" }); }
     catch { return { ok: true, committed: true, sessionCommitted: true, session: true, scope:"session", stateUnavailable: true, backup: backupDir,
       note: "Settings committed but readback failed; do not automatically retry. Reopen status before further edits." }; }
     return { ...view, committed: true, sessionCommitted: true, session:true, scope: "session", backup: backupDir, changed: result.changed, requiresModelReselection: sw.mode !== "official" || result.changed === true,
@@ -215,15 +268,28 @@ module.exports = function create(core) {
         .filter(k => result[k] !== undefined).map(k => [k, result[k]])), ...(cleanupWarning ? { cleanupWarning } : {}) };
   }
   async function prepareAccount(p,args){
-    fields(args,["action","scope","expectedRevision","patch","confirmedConfirmationTypes"]);
+    fields(args,["action","scope","expectedRevision","patch","confirmedConfirmationTypes","importSession"]);
     if(args.action!=="apply"||typeof args.expectedRevision!=="string")reject("settings apply requires expectedRevision");
+    if(args.importSession!==undefined&&typeof args.importSession!=="boolean")reject("invalid importSession setting");
     fields(args.patch,["switchMode","effortDefault","efforts","contexts","maxEffort","providers","routes","defaultProvider","routingMode","parameterPriority"]);
     const snap=snapshot(p);if(snap.revision!==args.expectedRevision)reject("settings changed; reopen the panel before applying");
-    const patch=args.patch,cfg=clone(snap.cfg||{mode:"explicit",enabled:"official",providers:{}});
-    cfg.enabled=core.resolveSwitch(p.dir,snap.cfg).mode;
-    cfg.parameterPriority=core.readParameters(p).priority;
-    const local=core.readEffort(p);cfg.effort={...(cfg.effort||{}),...(local.default!==undefined?{default:local.default}:{}),models:{...(cfg.effort?.models||{}),...(local.models||{})}};
-    cfg.context=clone(core.readContext(p));
+    const patch=args.patch,hasBaseline=!!snap.baseline;
+    let cfg;
+    if(hasBaseline){
+      if(args.importSession===true)reject("account baseline already exists; importSession is only for first publication");
+      cfg=clone(snap.baseline.cfg);cfg.providers||={};cfg.effort=accountEffort(cfg.effort);
+    }else if(typeof core.accountBaseline==="function"&&args.importSession!==true){
+      // Without a published baseline, ordinary account apply is patch-only.
+      cfg={mode:"explicit",enabled:"official",providers:{}};
+    }else{
+      // Explicit first migration may absorb the current session only when
+      // importSession=true. A local default masks config per-model defaults.
+      cfg=clone(snap.cfg||{mode:"explicit",enabled:"official",providers:{}});
+      cfg.enabled=core.resolveSwitch(p.dir,snap.cfg).mode;
+      cfg.parameterPriority=core.readParameters(p).priority;
+      cfg.effort=mergeAccountEffort(cfg.effort,core.readEffort(p));
+      cfg.context=clone(core.readContext(p));
+    }
     patchConfig(cfg,patch);
     if(patch.switchMode!==undefined){if(!["official","third-party","default"].includes(patch.switchMode))reject("invalid model source");if(patch.switchMode==="default")delete cfg.enabled;else cfg.enabled=patch.switchMode;}
     if(patch.parameterPriority!==undefined){if(!["3p","native"].includes(patch.parameterPriority))reject("invalid parameter priority");cfg.parameterPriority=patch.parameterPriority;}
@@ -234,6 +300,7 @@ module.exports = function create(core) {
     cfg.context ||= {version:1};
     if(patch.contexts!==undefined){if(!safeObject(patch.contexts))reject("invalid context patch");cfg.context.models ||= {};for(const [target,value]of Object.entries(patch.contexts)){if(value===null)delete cfg.context.models[target];else cfg.context.models[target]=value;}}
     effort.validatePreferences(cfg.effort);context.validate(cfg.context);
+    cfg.providers||={};
     if(Object.keys(cfg.providers).length){
       await core.buildPlan(clone(cfg),p.dir,{providers:{},keys:{}},{metadataOnly:true,preferences:{version:1},contextPreferences:cfg.context,parameterPriority:cfg.parameterPriority||"3p"});
       // Host-only env/file references are not portable account defaults. Resolve
@@ -256,7 +323,7 @@ module.exports = function create(core) {
       scopeBytes:bytes(path.join(p.dir,"workbuddy-3p.scope.json"))};
   }
   async function adoptAccount(p,prepared){
-    if(Object.entries(prepared.localFiles).some(([k,v])=>bytes(p[k])!==v)||Object.entries(prepared.sourceFiles).some(([f,v])=>bytes(f)!==v)||
+    if(Object.entries(prepared.localFiles).some(([k,v])=>bytes(p[k] || path.join(p.dir,"workbuddy-3p.scope.json"))!==v)||Object.entries(prepared.sourceFiles).some(([f,v])=>bytes(f)!==v)||
       JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k))))!==prepared.environment||bytes(path.join(p.dir,"workbuddy-3p.scope.json"))!==prepared.scopeBytes)
       reject("local configuration changed during account publication; resync explicitly");
     const scope=path.join(p.dir,"workbuddy-3p.scope.json");core.writeAtomic(scope,JSON.stringify({version:1,scope:"account"})+"\n");

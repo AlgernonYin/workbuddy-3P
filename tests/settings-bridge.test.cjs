@@ -70,8 +70,8 @@ function uiBridgeHarness(initialState, responses) {
   const ids = [
     "initial-state", "operation-status", "confirmation-panel", "confirmation-types", "confirm-apply-button", "cancel-confirmation-button",
     "publication-block-panel", "publication-block-detail", "status-recheck-button", "connection", "connection-title", "connection-detail",
-    "waiting-panel", "settings-panel", "account-sync-status", "account-connect-button", "account-finish-button", "account-login-status",
-    "model-source", "parameter-priority", "scope-account", "scope-session", "tab-providers", "tab-routing", "panel-providers", "panel-routing",
+    "waiting-panel", "waiting-detail", "settings-panel", "account-sync-status", "account-connect-button", "account-finish-button", "account-login-status",
+    "model-source", "parameter-priority", "scope-account", "scope-session", "import-session-button", "tab-providers", "tab-routing", "panel-providers", "panel-routing",
     "provider-list", "discovery-workbench", "new-provider-id", "new-provider-protocol", "new-provider-label", "new-provider-base-url",
     "new-provider-api-key-env", "new-provider-extra-models", "add-provider-button", "route-source", "route-target", "add-route-button",
     "official-model-options", "route-list", "offline-panel", "offline-output", "copy-offline-button", "download-offline-button",
@@ -132,6 +132,49 @@ test('an initial state does not leave discovery disabled after a boolean bridge 
   const find=(node,text)=>node.textContent===text?node:(node.children||[]).map(child=>find(child,text)).find(Boolean);
   const button=find(h.nodes['provider-list'],'拉取支持的模型');
   assert.ok(button);assert.equal(button.disabled,false);assert.deepEqual(h.callLog,[]);
+});
+test('switching to routing immediately includes a model imported in the provider layer',async()=>{
+ const h=uiBridgeHarness({ok:true,revision:'initial',accountSync:{available:true,status:'synced'},providers:[{id:'p',protocol:'openai-chat',nativeSessionSupported:true,baseUrl:'https://api.example.invalid/v1',models:{old:{maxInputTokens:64000}},extraModels:['old'],credential:{configured:true}}],routes:{}},[{structuredContent:{ok:true,providerId:'p',protocol:'openai-chat',supported:true,models:[{id:'new'}]}}]);
+ await h.settle();
+ const find=(node,predicate)=>predicate(node)?node:(node.children||[]).map(child=>find(child,predicate)).find(Boolean);
+ find(h.nodes['provider-list'],n=>n.tagName==='button'&&n.textContent==='拉取支持的模型').click();await h.settle();
+ const check=find(h.nodes['provider-list'],n=>n.id==='discovery-p-0');assert.ok(check);check.checked=true;check.dispatch('change');
+ find(h.nodes['provider-list'],n=>n.tagName==='button'&&n.textContent==='导入所选（尚未保存）').click();
+ h.nodes['tab-routing'].click();
+ assert.ok(h.nodes['route-target'].children.some(n=>n.value==='p:new'));
+});
+
+test('switching edit scope reads its separate baseline instead of promoting hidden session values',async()=>{
+ const account={ok:true,scope:'account',revision:'account-r',accountSync:{available:true,status:'synced'},configuredMode:'official',parameterPriority:'native',providers:[],routes:{}};
+ const session={...account,scope:'session',revision:'session-r',configuredMode:'third-party',parameterPriority:'3p'};
+ const h=uiBridgeHarness(account,[{structuredContent:session},{structuredContent:account}]);await h.settle();
+ h.nodes['scope-session'].checked=true;h.nodes['scope-session'].dispatch('change');await h.settle();
+ assert.deepEqual(JSON.parse(JSON.stringify(h.callLog[0].arguments)),{action:'status',scope:'session'});
+ assert.equal(h.nodes['model-source'].value,'third-party');assert.equal(h.nodes['parameter-priority'].value,'3p');
+ h.nodes['scope-account'].checked=true;h.nodes['scope-account'].dispatch('change');await h.settle();
+ assert.deepEqual(JSON.parse(JSON.stringify(h.callLog[1].arguments)),{action:'status',scope:'account'});
+ assert.equal(h.nodes['model-source'].value,'official');assert.equal(h.nodes['parameter-priority'].value,'native');
+ assert.equal(h.nodes['apply-button'].disabled,true);
+});
+
+test('first session import is a separate explicit account publication and cannot be triggered by a scope radio',async()=>{
+ const account={ok:true,scope:'account',canImportSession:true,revision:'r',accountSync:{available:true,status:'not-published'},configuredMode:'official',providers:[],routes:{}};
+ const session={...account,scope:'session',configuredMode:'third-party',parameterPriority:'3p'};
+ const h=uiBridgeHarness(account,[{structuredContent:session},{structuredContent:{...account,committed:true,accountCommitted:true}}]);await h.settle();
+ assert.equal(h.nodes['import-session-button'].disabled,false);
+ h.nodes['import-session-button'].click();await h.settle();
+ assert.equal(h.nodes['scope-account'].checked,true);assert.equal(h.nodes['apply-button'].disabled,false,h.nodes['operation-status'].textContent);
+ h.nodes['apply-button'].click();await h.settle();
+ const request=h.callLog.find(c=>c.arguments.action==='apply').arguments;
+ assert.equal(request.scope,'account');assert.equal(request.importSession,true);assert.deepEqual(Object.keys(request.patch),[]);
+});
+
+test('an unsaved draft prevents scope switches and cannot leak into account edits',async()=>{
+ const h=uiBridgeHarness({ok:true,scope:'session',revision:'r',accountSync:{available:true,status:'synced'},configuredMode:'official',providers:[],routes:{}},[]);await h.settle();
+ h.nodes['model-source'].value='third-party';h.nodes['model-source'].dispatch('change');
+ h.nodes['scope-account'].checked=true;h.nodes['scope-account'].dispatch('change');await h.settle();
+ assert.equal(h.nodes['scope-session'].checked,true);assert.equal(h.callLog.length,0);
+ assert.match(h.nodes['operation-status'].textContent,/未复制任何参数/);
 });
 test("bridge rejects errors with otherwise plausible state and never treats notifications as an apply receipt", async () => {
   const b = bridge({ structuredContent: { ok: false, revision: "old", models: [] } });

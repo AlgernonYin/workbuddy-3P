@@ -33,7 +33,7 @@ function fixture(t, extra = {}) {
   };
   const ok = expr => { const r = invoke(expr); assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout); };
   const read = name => JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
-  const status = () => ok("console.log(JSON.stringify(await lib.settingsStatus()))");
+  const status = () => ok("console.log(JSON.stringify(await lib.settingsStatus({scope:'session'})))");
   const apply = (patch, revision = status().revision) => ok(`console.log(JSON.stringify(await lib.applySettings(${JSON.stringify({ action: "apply", scope: "session", expectedRevision: revision, patch })})))`);
   const snap = () => ["workbuddy-3p.json", "workbuddy-3p.effort.json", "workbuddy-3p.context.json", "workbuddy-3p.switch", "models.json", "workbuddy-3p.state.json"]
     .map(n => fs.existsSync(path.join(dir, n)) ? fs.readFileSync(path.join(dir, n), "utf8") : null);
@@ -115,7 +115,7 @@ test("MCP Apps resource metadata and structured state use the real settings API"
   const f = fixture(t);
   const messages = [{ id: 1, method: "initialize" }, { id: 2, method: "tools/list" },
     { id: 3, method: "resources/read", params: { uri: "ui://workbuddy-3p/settings" } },
-    { id: 4, method: "tools/call", params: { name: "models_settings", arguments: { action: "status" } } }];
+    { id: 4, method: "tools/call", params: { name: "models_settings", arguments: { action: "status", scope: "session" } } }];
   const r = spawnSync(process.execPath, [path.join(path.dirname(script), "mcp-sync.cjs")], { env: f.env, encoding: "utf8",
     input: messages.map(m => JSON.stringify({ jsonrpc: "2.0", ...m })).join("\n") + "\n" });
   assert.equal(r.status, 0, r.stderr); assert.ok(!r.stdout.includes(canary));

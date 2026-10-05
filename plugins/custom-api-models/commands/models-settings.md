@@ -2,18 +2,20 @@
 description: Open the WorkBuddy 3P settings panel or apply explicit provider, model, route, and account settings
 ---
 
-Use `models_settings` for the WorkBuddy 3P settings panel. Read `action: "status"` before any mutation and explain that account defaults affect future/account-backed sandboxes, while the current host may still need a catalog refresh and model reselection.
+Use `models_settings` for the WorkBuddy 3P settings panel. Read `action: "status"` before any mutation and explain that account defaults affect future/account-backed sandboxes, while the current host may still need a catalog refresh and model reselection. This command describes candidate behavior; do not claim publication to `main` or completed human-run third-party acceptance.
 
 The public settings model has two layers:
 
 1. **Provider + model:** only an OpenAI Chat Completions-compatible endpoint is supported for session routing. Add a provider with an HTTPS `baseUrl` and a credential reference such as `apiKeyEnv`; never ask for or return an inline key. Use `GET /models` discovery when supported, otherwise import model IDs manually. For each imported model, declare only user-confirmed CTX, output limit, tools, images, reasoning, and `supportedEfforts`. Unknown capability stays unknown: do not guess 128K context, do not infer tools or images from a model name, and do not treat an input limit as provider capacity or compression evidence.
-2. **Routing:** map an official WorkBuddy slot to an explicit `provider:model` and set that route's effort. New configurations start with `mode: "explicit"` and empty routes. Do not create a provider default or a highest-effort default. Legacy preset/inference modes and built-in presets are advanced compatibility for old explicit configs only; never present them as the public workflow.
+2. **Routing:** map an official WorkBuddy slot to an explicit `provider:model` and set that route's effort. New configurations start with `mode: "explicit"` and empty routes. Do not create a personal-provider default, vendor-preset default, highest-tier default, or highest-effort default. Legacy preset/inference modes and built-in presets are advanced compatibility for old explicit configs only; never present them as the public workflow.
 
 ## Account connection and publishing
 
 If `status.accountSync.available` is false, call `{ "action": "connect" }`. It returns the official WorkBuddy CLI/web login URL. The user must complete that login in their own account. Then call `{ "action": "finish-connect" }`; it verifies the account and private profile. `accountConnected: true` with `accountCommitted: false` means authorization only, not a published profile. Connecting does not switch the source or change routing.
 
 Use `scope: "account"` by default for `apply`. Use `scope: "session"` only when the user explicitly asks for an advanced current-sandbox override. If account sync is unavailable, do not silently fall back to session scope.
+
+In the default `account` scope, the panel view and `apply` use the last published account baseline. Ordinary account label edits update only that baseline; they do not globalize session parameters. If no baseline exists, account scope starts from an empty configuration. The first migration requires an explicit `importSession: true`; the panel exposes this as the advanced action **首次导入当前会话到账号（需明确保存）** (`Import current session into account for the first time (explicit save required)`). Switching scope reloads that scope's independent view; unsaved drafts are not copied automatically.
 
 Account sync credentials are the official Bearer access token plus refresh token, not a runtime model token. They belong only in owner-side mode-600 runtime storage and the private profile. Never display them, put them in a draft, or send them to a public URL. The first private credential sync requires explicit owner authorization; its runtime connection/cache files remain gitignored and must not be published. Host-only `apiKeyEnv`, `apiKeyFile`, and `apiKeyUrl` references are resolved privately during account apply and embedded only in the authorized private account package, never in a public view. Do not hand-merge and do not use a manual `mergeProfile` workflow; apply only through revision-guarded settings.
 
@@ -26,7 +28,7 @@ For account publish:
 - Unknown or timed-out publication persists `retryBlocked: true`; use `models_settings`/`models_status` to reconcile. Never resubmit the same upload. There is no verified server-side CAS across sandboxes, so concurrent changes can still conflict or lose updates; revision checks and ready/readback are not an atomic multi-file transaction.
 - If the remote account asset is missing, keep last-good cached routes. Report local partial/`stateUnavailable`/pending results as pending; do not automatically resend a session apply.
 - After a committed save, explain `requiresHostRefresh` and `requiresModelReselection` when present. A global account change is not an instant native model switch on the current host. Active MCP sessions poll the private profile revision every 45 seconds and sync changes eventually; sleep, reclamation, or process restart can delay that.
-- A fresh sandbox loads account profile data after plugin initialization. An old plugin must be upgraded, and the model must be reselected after the upgrade. A read-only volume remains read-only; account scope does not make it writable.
+- A fresh sandbox adopts the published account configuration by default. Non-empty SDK options are not by themselves an explicit session-source selection, and connecting an account alone does not switch the source. An old plugin must be upgraded, and the model must be reselected after the upgrade. A read-only volume remains read-only; account scope does not make it writable.
 
 ## Panel fallback and draft mode
 
@@ -38,13 +40,15 @@ Without a bridge, the standalone HTML cannot discover or probe models. Treat the
 
 With a bridge or the MCP tool, use `{ "action": "discover", "providerId": "<saved-provider>" }` for `GET /models`. A 404, 405, or 501 means discovery is unsupported; ask the user for model IDs and declare capabilities manually.
 
-Use `{ "action": "probe", "providerId": "<saved-provider>", "model": "<model-id>", "allowBillable": true }` only after the user explicitly accepts a potentially billed request. The probe sends a fixed marker with `max_tokens: 16`; it is successful only when the response completes and contains the marker. HTTP 200 alone is not enough. It verifies the endpoint/model, not host routing, protocol translation, or current session traffic. Do not claim physical-phone acceptance or context compression from a probe.
+Use `{ "action": "probe", "providerId": "<saved-provider>", "model": "<model-id>", "allowBillable": true }` only after the user explicitly accepts a potentially billed request. The probe sends a fixed marker with `max_tokens: 16`; it is successful only when the response completes and contains the marker. HTTP 200 alone is not enough. It verifies the endpoint/model, not host routing, protocol translation, or current session traffic. Do not claim physical-phone acceptance, long-context testing, context compression, or human-run third-party acceptance from a probe.
 
 ## Routing, effort, and credentials
 
 For each route, use `provider:model` and an optional effort from that model's declared `supportedEfforts`. A route-level effort wins over the model/default effort. Do not infer adjustable effort from `onlyReasoning`. Do not offer a bulk highest-effort operation in the public account flow.
 
 Use `models_effort` with `scope` remaining `default` / `model` / `all` and `saveScope` defaulting to `account`; use `saveScope: "session"` only when explicitly requested. Use `models_switch` with `scope` defaulting to `account`; `scope: "session"` is an explicit local override and account unavailability must never silently fall back to it.
+
+When provider, preset, route, capability, or cache state is broken, use the current-sandbox emergency fallback `models_switch` with `{ "mode": "official", "scope": "session" }` or `node scripts/sync-models.cjs --official --scope session`. It requires no account authorization, is not globalized, and does not overwrite models whose ownership is uncertain. Repair the bad configuration before restoring 3P.
 
 `3p` is the advanced default parameter priority. Inside the target cloud sandbox, routing changes only the upstream model ID and user effort; it does not translate content, tools, images, streaming, or SSE protocol. Only an OpenAI Chat Completions-compatible endpoint is supported; there is no protocol selector. The original upstream key remains private and is used only on the upstream Authorization request. Official mode fails closed for proxy forwarding and sends no third-party traffic. `native` disables 3P forced parameters but may still use an adapter for model-ID mapping when an explicit route binding requires it; do not promise direct connectivity in every configuration.
 

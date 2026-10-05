@@ -108,19 +108,39 @@ function resolveSwitch(dir, cfg, ignoreLocal = false) {
   if (cfg && cfg.enabled !== undefined) return { mode: parseSwitch(cfg.enabled, "config.enabled"), from: "config" };
   return { mode: "third-party", from: "default" };
 }
-async function setSwitch(mode) {
+async function setSwitch(mode, options = {}) {
+  if (!isObj(options) || Object.keys(options).some(k => k !== "scope") || options.scope !== undefined && !["session", "account"].includes(options.scope)) fail("invalid switch scope");
   const m = parseSwitch(mode, "switch");
   const p = paths();
   return withLock(p.dir, async () => {
-    if(usesAccount(p.dir))fail("Account defaults active; use models_settings apply (account), or explicitly choose scope=session in the panel.");
+    const escape = options.scope === "session" && m === "official";
+    if(!escape && usesAccount(p.dir))fail("Account defaults active; use models_settings apply (account), or explicitly choose scope=session in the panel.");
     const previous = fs.existsSync(p.switch) ? fs.readFileSync(p.switch, "utf8") : null;
+    const oldScope = fs.existsSync(p.scope) ? fs.readFileSync(p.scope,"utf8") : null;
+    let backup;
+    if(escape){
+      backup=path.join(p.dir,"workbuddy-3p.backups",Date.now()+"-official-escape-"+require("crypto").randomBytes(4).toString("hex"));fs.mkdirSync(backup,{recursive:true,mode:0o700});fs.chmodSync(backup,0o700);
+      for(const f of [p.scope,p.switch,p.models,p.state])if(fs.existsSync(f))fs.writeFileSync(path.join(backup,path.basename(f)),fs.readFileSync(f),{mode:0o600,flag:"wx"});
+    }
     try {
-      if (!m) fs.rmSync(p.switch, { force: true }); else writeAtomic(p.switch, m + "\n");
+      if(escape)writeAtomic(p.scope,JSON.stringify({version:1,scope:"session"})+"\n",oldScope);
+      if (!m) fs.rmSync(p.switch, { force: true }); else writeAtomic(p.switch, m + "\n", previous);
       const result = await syncUnlocked({}, p);
-      fs.rmSync(p.lastError, { force: true });
-      return result;
+      try { fs.rmSync(p.lastError, { force: true }); } catch { result.cleanupWarning = "switch committed; stale error record remains"; }
+      return {...result,...(escape?{scope:"session",committed:true,sessionCommitted:true,backup}: {})};
     } catch (e) {
-      if (previous === null) fs.rmSync(p.switch, { force: true }); else writeAtomic(p.switch, previous);
+      // An external writer is not part of our transaction. Restore only bytes
+      // that we wrote (or that were never changed), never a concurrent edit.
+      let restored = true;
+      for (const [file, before, written] of [[p.switch, previous, m ? m+"\n" : null], ...(escape ? [[p.scope, oldScope, JSON.stringify({version:1,scope:"session"})+"\n"]] : [])]) {
+        try {
+          const current = fs.existsSync(file) ? fs.readFileSync(file,"utf8") : null;
+          if (current === before) continue;
+          if (current !== written) { restored = false; continue; }
+          if (before === null) fs.rmSync(file,{force:true}); else writeAtomic(file,before,current);
+        } catch { restored = false; }
+      }
+      if (!restored) e = new ConfigError("official switch failed; concurrent edits preserved, rollback incomplete; inspect private backup before retrying");
       recordError(p, e);
       throw e;
     }
@@ -159,9 +179,9 @@ function cloudProfile(dir) {
   return { cfg: profile.config, from: found[0] };
 }
 function loadConfig(dir) {
-  const global = require("./account-profile.cjs").cached({dir});
   const scope = readJsonStrict(path.join(dir,"workbuddy-3p.scope.json"),"settings scope");
   if(scope && (!isObj(scope)||scope.version!==1||!["session","account"].includes(scope.scope)))fail("invalid settings scope");
+  const global = scope?.scope==="session" ? null : require("./account-profile.cjs").cached({dir});
   if(global && (scope?.scope==="account" || !scope && global.connectionOnly!==true))return {cfg:global.config,from:require("./account-profile.cjs").cachePath({dir})};
   if (ENV.WB3P_CONFIG_JSON) {
     try { return { cfg: JSON.parse(ENV.WB3P_CONFIG_JSON), from: "$WB3P_CONFIG_JSON" }; }
@@ -219,7 +239,7 @@ function loadPreset(name) {
 const OFFICIAL = readJsonLoose(path.join(PRESETS, "workbuddy-official.json")) || { keepOfficial: [], routable: [] };
 
 // ---------- persistent model-default effort (no credentials) ----------
-function usesAccount(dir){const c=require("./account-profile.cjs").cached({dir}),s=readJsonStrict(paths(dir).scope,"settings scope");return !!c&&(s?.scope==="account"||!s&&c.connectionOnly!==true);}
+function usesAccount(dir){const s=readJsonStrict(paths(dir).scope,"settings scope");if(s?.scope==="session")return false;const c=require("./account-profile.cjs").cached({dir});return !!c&&(s?.scope==="account"||!s&&c.connectionOnly!==true);}
 function readParameters(p){
   if(usesAccount(p.dir))return {version:1,priority:account.cached(p)?.config?.parameterPriority||"3p"};
   let cfg;try{cfg=loadConfig(p.dir).cfg;}catch{cfg={};}
@@ -274,12 +294,18 @@ async function effortContext(p, local) {
   return { cfg, sw, plan };
 }
 
-async function effortStatus({ model } = {}) {
+async function effortStatus({ model, scope } = {}) {
+  if(scope!==undefined && !["account","session"].includes(scope))fail("invalid effort view scope");
   const p = paths();
   return withLock(p.dir, async () => {
     const current = parseModels(fs.existsSync(p.models) ? fs.readFileSync(p.models, "utf8") : null);
     const state = readState(p); checkOwnership(current, state);
-    const local = readEffort(p), { cfg, sw, plan, capabilityWarning } = await effortContext(p, local);
+    let local, cfg, sw, plan, capabilityWarning;
+    if(scope==="account") {
+      cfg=publishedBaseline(p)?.cfg || {enabled:"official",providers:{}};local={version:1};
+      sw={mode:parseSwitch(cfg.enabled,"account config")||"third-party",from:"account"};
+      plan=await buildPlan(clone(cfg),p.dir,{providers:{},keys:{}},{metadataOnly:true,preferences:local,contextPreferences:cfg.context||{version:1},parameterPriority:cfg.parameterPriority||"3p"});
+    } else {local=readEffort(p);({cfg,sw,plan,capabilityWarning}=await effortContext(p,local));}
     return { ...effortReport(plan, cfg, local, sw, current, state, model), ...(capabilityWarning ? { capabilityWarning } : {}) };
   });
 }
@@ -866,19 +892,22 @@ async function maintainRuntime() {
 const account = require("./account-profile.cjs").create({withLock,writeAtomic,cloudProfile,
   hasLocalOverrides:dir=>configCandidates(dir).some(f=>fs.existsSync(f))||["switch","effort","context","parameters","scope"].some(k=>fs.existsSync(paths(dir)[k]))||Object.keys(ENV).some(k=>/^(WB3P_|CODEBUDDY_PLUGIN_OPTION_|CLAUDE_PLUGIN_OPTION_)/.test(k)&&!!ENV[k]&&!['WB3P_PROFILE','WB3P_CLOUD_SKILLS_DIR'].includes(k))});
 let accountMeta={available:false,status:"not-connected"};
+function publishedBaseline(p){const c=account.cached(p);return c?.cloudUid&&c.connectionOnly!==true&&isObj(c.config)?{cfg:c.config,from:account.cachePath(p)}:null;}
 const settings = require("./settings.cjs")({ loadConfig, resolveSwitch, readEffort, readParameters, readContext, configCandidates, resolveKey, loadPreset, buildPlan, parseModels, readState,
+  accountBaseline:publishedBaseline,
   officialModels:[...new Set([...(OFFICIAL.routable||[]),...(OFFICIAL.keepOfficial||[])])],
   accountMeta:()=>accountMeta,
   checkOwnership, prevKeys, writeAtomic, writeAtomicChecked: writeAtomic, syncUnlocked, fingerprint, presetFingerprint });
 async function providerRequest(args = {}) {
-  if (!isObj(args) || Object.keys(args).some(k => !["action", "providerId", "model", "allowBillable"].includes(k)) ||
+  if (!isObj(args) || Object.keys(args).some(k => !["action", "scope", "providerId", "model", "allowBillable"].includes(k)) || args.scope!==undefined && !["account","session"].includes(args.scope) ||
       !["discover", "probe"].includes(args.action) || !imported.safeId(args.providerId)) fail("invalid provider operation");
   if (args.action === "probe" && (args.allowBillable !== true || !imported.safeId(args.model)))
     fail("a model probe requires an explicit model and allowBillable=true");
   if (args.action === "discover" && (args.model !== undefined || args.allowBillable !== undefined)) fail("invalid discovery arguments");
   const p = paths();
+  if(args.scope!=="session")accountMeta=await account.pull(p);
   const current = await withLock(p.dir, async () => {
-    const { cfg } = loadConfig(p.dir); validateConfig(cfg);
+    const cfg = args.scope==="session" ? loadConfig(p.dir).cfg : publishedBaseline(p)?.cfg; validateConfig(cfg);
     const provider = cfg.providers[args.providerId];
     if (!provider) fail("unknown saved provider; save it before model discovery");
     const preset = loadPreset(provider.preset);
@@ -895,7 +924,7 @@ async function providerRequest(args = {}) {
       ...(args.action === "probe" ? { model: args.model, note: "Native endpoint probe only; host protocol support and routed session traffic require separate verification." } : {}) };
   } catch (e) { return { ok: false, providerId: args.providerId, error: { code: e instanceof providerApi.ProviderDiscoveryError ? e.code : "REQUEST_FAILED", status: e instanceof providerApi.ProviderDiscoveryError ? e.status : null } }; }
 }
-async function settingsStatus() { const p = paths(); accountMeta=await account.pull(p); return withLock(p.dir, () => settings.viewUnlocked(p)); }
+async function settingsStatus(options = {}) { const p = paths(); accountMeta=await account.pull(p); return withLock(p.dir, () => settings.viewUnlocked(p, options)); }
 async function applySettings(args) {
   const p=paths(),scope=args?.scope||"account";
   if(scope==="session")return withLock(p.dir,()=>settings.applyUnlocked(p,args));
@@ -952,7 +981,7 @@ if (require.main === module) {
   else if (a.includes("--uninstall")) run = Promise.resolve().then(uninstall);
   else if (a.includes("--doctor")) run = doctor();
   else if (a.includes("--status")) run = Promise.resolve().then(status);
-  else if (a.includes("--official")) run = setSwitch("official");
+  else if (a.includes("--official")) run = setSwitch("official", val("--scope") ? {scope:val("--scope")} : {});
   else if (a.includes("--third-party")) run = setSwitch("third-party");
   else if (a.includes("--switch")) run = setSwitch(val("--switch") === "clear" ? "" : val("--switch"));
   else run = sync({ dryRun: a.includes("--dry-run") }).then(r => { if (r.plan) delete r.plan; return r; });

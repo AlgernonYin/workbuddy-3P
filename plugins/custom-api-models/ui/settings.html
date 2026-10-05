@@ -196,7 +196,9 @@
         <div class="scope-options">
           <label class="choice" for="scope-account"><input id="scope-account" type="radio" name="save-scope" value="account" checked><span><strong>账号同步（scope=account，默认）</strong><small>保存后按宿主能力同步到新会话。</small></span></label>
           <details class="advanced">
-            <summary>高级选项：仅当前会话</summary>
+            <summary>高级选项：仅当前会话与首次导入</summary>
+            <div class="inline-actions"><button id="import-session-button" class="button secondary small" type="button">首次导入当前会话到账号（需明确保存）</button></div>
+            <p class="field-help">账号编辑只基于账号配置，不会隐式复制会话参数。首次导入会明确包含当前会话的供应商、路由、思考和上下文设置。</p>
             <label class="choice" for="scope-session" style="margin-top:10px"><input id="scope-session" type="radio" name="save-scope" value="session"><span><strong>仅当前会话（scope=session）</strong><small>不承诺账号同步，重启或新会话可能丢失。</small></span></label>
           </details>
         </div>
@@ -414,6 +416,8 @@
       if (!isObject(value)) return null;
       return {
         revision: normalizeText(value.revision),
+        scope: value.scope === "session" ? "session" : "account",
+        canImportSession: value.canImportSession === true,
         configuredMode: normalizeConfiguredMode(value.configuredMode),
         parameterPriority: normalizeParameterPriority(value.parameterPriority),
         readOnly: value.readOnly === true,
@@ -516,7 +520,9 @@
       return patch;
     }
     function createApplyRequest(original, draft) {
-      return { action: "apply", scope: draft && draft.scope === "session" ? "session" : "account", expectedRevision: original && original.revision ? original.revision : null, patch: makePatch(original, draft) };
+      var request = { action: "apply", scope: draft && draft.scope === "session" ? "session" : "account", expectedRevision: original && original.revision ? original.revision : null, patch: makePatch(original, draft) };
+      if (request.scope === "account" && draft && draft.importSession === true) request.importSession = true;
+      return request;
     }
     function effortOptionValues(model) {
       var values = [], seen = Object.create(null), supported = model && Array.isArray(model.supportedEfforts) ? model.supportedEfforts : [];
@@ -583,11 +589,12 @@
       return lines.join("\n");
     }
     function createOfflineInstruction(request) {
+      if (request && request.action === "status" && request.scope) return "请在原会话调用 models_settings 工具；尚未执行。\n" + JSON.stringify(request, null, 2);
       if (request && (request.action === "connect" || request.action === "finish-connect" || (request.action === "status" && !request.patch))) return createAccountInstruction(request.action);
       return "请在原会话调用 models_settings 工具应用以下设置；尚未应用。\n" + "global draft（全局草稿）\n" + "scope=" + request.scope + "\n" + "expectedRevision=" + request.expectedRevision + "\n" + JSON.stringify(request, null, 2);
     }
-    function discoverRequest(providerId) { return { action: "discover", providerId: providerId }; }
-    function probeRequest(providerId, model) { return { action: "probe", providerId: providerId, model: model, allowBillable: true }; }
+    function discoverRequest(providerId, scope) { var request = { action: "discover", providerId: providerId }; if (scope) request.scope = scope; return request; }
+    function probeRequest(providerId, model, scope) { var request = { action: "probe", providerId: providerId, model: model, allowBillable: true }; if (scope) request.scope = scope; return request; }
     function importedTargets(state) {
       var targets = [];
       (state && state.providers ? state.providers : []).forEach(function (provider) {
@@ -625,7 +632,7 @@
     function setBusy(value) { app.busy = value; refreshAction(); refreshOperationControls(); }
     function selectedScope() { var session = document.getElementById("scope-session"); return app.draft && app.draft.scope === "session" && session && session.checked ? "session" : "account"; }
     function accountSyncUsable() { return !!(app.original && app.original.accountSync && app.original.accountSync.available === true && app.original.accountSync.retryBlocked !== true && app.original.accountSync.outcomeUnknown !== true && app.original.accountSync.publicationPending !== true); }
-    function hasPatch() { return !!app.original && !!app.draft && Object.keys(makePatch(app.original, app.draft)).length > 0; }
+    function hasPatch() { return !!app.original && !!app.draft && (app.draft.importSession === true || Object.keys(makePatch(app.original, app.draft)).length > 0); }
     function publicationReasonFromAccountSync(sync) {
       if (!sync) return null;
       if (sync.publicationPending === true) return "publicationPending";
@@ -658,6 +665,8 @@
       if (statusButton) statusButton.disabled = app.busy || !app.publicationBlocked;
       if (connectButton) connectButton.disabled = app.busy || app.bridgeConnecting;
       if (finishButton) { finishButton.disabled = app.busy || app.bridgeConnecting || !app.accountAuthorizationUrl; finishButton.hidden = !app.accountAuthorizationUrl; }
+      ["scope-account", "scope-session"].forEach(function (id) { var node = document.getElementById(id); if (node) node.disabled = readOnly || app.busy || !!app.pendingConfirmation || !!app.publicationBlocked; });
+      var importButton = document.getElementById("import-session-button"); if (importButton) { importButton.hidden = !app.original || !app.original.canImportSession; importButton.disabled = app.busy || readOnly || !app.original || !app.original.canImportSession || !!app.pendingConfirmation || !!app.publicationBlocked; }
     }
     function refreshAction() {
       var button = document.getElementById("apply-button"), title = document.getElementById("action-title"), detail = document.getElementById("action-detail");
@@ -668,7 +677,7 @@
       if (app.pendingConfirmation) {
         button.textContent = "等待明确确认"; button.disabled = true; title.textContent = "需要用户确认"; detail.textContent = "请查看上方确认控件；只有点击确认并重试后才会带 confirmedConfirmationTypes 重发。"; refreshOperationControls(); return;
       }
-      var patch = makePatch(app.original, app.draft), changed = Object.keys(patch).length > 0;
+      var patch = makePatch(app.original, app.draft), changed = hasPatch();
       var bridgeMode = app.bridgeReady && app.bridge && typeof app.bridge.callTool === "function", scope = selectedScope();
       var accountUnavailable = scope === "account" && !accountSyncUsable();
       button.textContent = app.original.readOnly ? "宿主只读" : accountUnavailable ? "生成全局草稿" : bridgeMode ? (app.busy ? "应用中…" : "保存并应用") : "生成离线指令";
@@ -875,7 +884,7 @@
       if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { setStatus("error", "当前没有宿主桥，不能发现模型；页面不会改用 HTTP。"); return; }
       setBusy(true);
       try {
-        var result = await app.bridge.callTool(discoverRequest(providerId));
+        var result = await app.bridge.callTool(discoverRequest(providerId, app.original.scope));
         if (result.ok !== true) throw new Error(result.error || "发现失败");
         var provider = providerMap(app.draft)[providerId]; if (!provider) throw new Error("Provider 不存在");
         provider.discovery = { supported: result.supported !== false, models: Array.isArray(result.models) ? result.models : [], error: result.error || null };
@@ -889,7 +898,7 @@
       if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { setStatus("error", "当前没有宿主桥，不能执行连通测试；页面不会改用 HTTP。"); return; }
       setBusy(true);
       try {
-        var result = await app.bridge.callTool(probeRequest(providerId, model));
+        var result = await app.bridge.callTool(probeRequest(providerId, model, app.original.scope));
         var provider = providerMap(app.draft)[providerId];
         var ok = result.ok === true && result.completed === true && result.markerMatched === true;
         if (provider) provider.probe = { ok: ok, message: ok ? "探针成功：只证明原生端点可达与标记匹配，不证明宿主协议支持；配置未修改。" : "探针未通过：" + (result.error ? (result.error.message || result.error.code || result.error) : "未完成或标记不匹配") + "；配置未修改。" };
@@ -914,7 +923,7 @@
     function generateOffline() {
       if (app.publicationBlocked) { setStatus("info", publicationBlockMessage(app.publicationBlocked)); return; }
       if (!app.original || !app.draft) { setStatus("error", "尚未收到有效 state。"); return; }
-      var request = createApplyRequest(app.original, app.draft); if (!Object.keys(request.patch).length) { setStatus("info", "没有需要提交的修改。"); return; }
+      var request = createApplyRequest(app.original, app.draft); if (!Object.keys(request.patch).length && request.importSession !== true) { setStatus("info", "没有需要提交的修改。"); return; }
       revealOffline(request); setStatus("info", "已生成 global draft（全局草稿），尚未应用。请复制到原会话发送。");
     }
     async function copyOffline() {
@@ -999,7 +1008,7 @@
       setBusy(true); hideStatus();
       try {
         var finishResult = await app.bridge.callTool({ action: "finish-connect" });
-        var statusResult = await app.bridge.callTool({ action: "status" });
+        var statusResult = await app.bridge.callTool({ action: "status", scope: selectedScope() });
         var statusState = extractState(statusResult);
         if (!statusState) throw new Error("status 未返回完整 state；ok:true 动作回执不能当作完整状态");
         app.accountAuthorizationUrl = null;
@@ -1047,7 +1056,7 @@
       var request = requestOverride ? copy(requestOverride) : createApplyRequest(app.original, app.draft);
       if (app.publicationBlocked) { setStatus("info", publicationBlockMessage(app.publicationBlocked)); return; }
       if (app.pendingConfirmation && !confirmedTypes) { setStatus("info", "等待用户明确确认；不会自动重发 apply。"); return; }
-      if (!Object.keys(request.patch || {}).length) { setStatus("info", "没有需要提交的修改。"); return; }
+      if (!Object.keys(request.patch || {}).length && request.importSession !== true) { setStatus("info", "没有需要提交的修改。"); return; }
       if (confirmedTypes && confirmedTypes.length) request = withConfirmedConfirmationTypes(request, confirmedTypes);
       if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { revealOffline(request); setStatus("info", "未检测到宿主桥；已生成 global draft（全局草稿），尚未应用，也未伪造成功。"); return; }
       if (request.scope === "account" && !accountSyncUsable()) { revealOffline(request); setStatus("info", "账号同步不可用，未提交；已生成 global draft（全局草稿），仍需回到原会话处理。"); return; }
@@ -1064,8 +1073,26 @@
       } catch (error) { var message = error && error.message ? error.message : String(error); hideConfirmation(); renderPublicationBlock("outcomeUnknown", request); setStatus("error", "宿主桥调用失败，发布结果未知：" + message + "。已阻止自动或重复发布；请读取 status。"); }
       finally { if (app.pendingApply && app.pendingApply.id === token.id) app.pendingApply = null; setBusy(false); }
     }
-    function onBridgeNotification(payload) { var next = extractState(payload); if (!next) return; if (app.bridge && typeof app.bridge.callTool === "function") app.bridgeReady = true; if (app.pendingApply || app.pendingConfirmation || app.publicationBlocked) return; applyState(next, "bridge", app.draft && app.draft.scope); setConnection("online", "宿主桥已连接", "已通过 ui/notifications/tool-result 收到模型配置。"); }
-    function switchTab(tab) { var provider = tab === "providers", p = document.getElementById("panel-providers"), r = document.getElementById("panel-routing"), pt = document.getElementById("tab-providers"), rt = document.getElementById("tab-routing"); p.hidden = !provider; r.hidden = provider; pt.setAttribute("aria-selected", provider ? "true" : "false"); rt.setAttribute("aria-selected", provider ? "false" : "true"); notifySizeSoon(); }
+    function onBridgeNotification(payload) { var next = extractState(payload); if (!next) return; if (app.bridge && typeof app.bridge.callTool === "function") app.bridgeReady = true; if (app.pendingApply || app.pendingConfirmation || app.publicationBlocked || hasPatch() || app.draft && next.scope !== app.draft.scope) return; applyState(next, "bridge"); setConnection("online", "宿主桥已连接", "已通过 ui/notifications/tool-result 收到模型配置。"); }
+
+    async function changeScope(scope, importSession) {
+      if (!app.original || !app.draft) return;
+      if (app.busy || app.pendingConfirmation || app.publicationBlocked || hasPatch()) { renderScope(); setStatus("info", "请先保存或重新打开面板处理当前草稿，再切换编辑范围；未复制任何参数。"); return; }
+      if (!app.bridgeReady || !app.bridge || typeof app.bridge.callTool !== "function") { renderScope(); revealOffline({ action: "status", scope: importSession ? "session" : scope }); setStatus("info", "离线产物不能读取另一范围的配置；请在原会话重新打开指定 scope 的面板。首次导入还需显式 importSession=true。"); return; }
+      setBusy(true);
+      try {
+        var viewScope = importSession ? "session" : scope;
+        var result = await app.bridge.callTool({ action: "status", scope: viewScope });
+        var state = extractState(result);
+        if (!state || state.scope !== viewScope) throw new Error("宿主未返回指定范围的完整配置，编辑范围未改变");
+        if (importSession && state.canImportSession !== true) throw new Error("账号已有发布配置，不能隐式导入当前会话");
+        applyState(state, "bridge", scope);
+        if (importSession) { app.draft.importSession = true; refreshAction(); setStatus("info", "当前是明确的首次导入草稿：保存会把当前会话供应商、路由和参数发布为账号默认；尚未保存。"); }
+        else setStatus("info", "已读取 scope=" + scope + " 的配置，未保存修改。");
+      } catch (error) { renderScope(); setStatus("error", "切换编辑范围失败：" + (error && error.message ? error.message : String(error))); }
+      finally { setBusy(false); }
+    }
+    function switchTab(tab) { var provider = tab === "providers", p = document.getElementById("panel-providers"), r = document.getElementById("panel-routing"), pt = document.getElementById("tab-providers"), rt = document.getElementById("tab-routing"); p.hidden = !provider; r.hidden = provider; pt.setAttribute("aria-selected", provider ? "true" : "false"); rt.setAttribute("aria-selected", provider ? "false" : "true"); if (!provider && app.original && app.draft) renderRoutes(); notifySizeSoon(); }
     function renderEditor() {
       document.getElementById("waiting-panel").hidden = true; document.getElementById("settings-panel").hidden = false;
       renderScope(); renderProviders(); renderRoutes();
@@ -1074,7 +1101,7 @@
     }
     function applyState(state, reason, preserveScope) {
       var normalized = normalizeState(state); if (!normalized) return false;
-      app.original = normalizeState(state); app.draft = copy(normalized); app.draft.scope = preserveScope === "session" || (preserveScope !== "account" && app.draft && app.draft.scope === "session") ? "session" : "account";
+      app.original = normalizeState(state); app.draft = copy(normalized); app.draft.scope = preserveScope === "account" || preserveScope === "session" ? preserveScope : normalized.scope;
       renderEditor(); var blockedReason = publicationReasonFromAccountSync(normalized.accountSync); if (blockedReason) renderPublicationBlock(blockedReason, null, normalized.accountSync); if (reason === "bridge") document.getElementById("waiting-detail").textContent = "已收到宿主 state。"; return true;
     }
     function applyStatePreservingDraft(state, reason, preserveScope) {
@@ -1111,8 +1138,9 @@
     function initialize() {
       document.getElementById("tab-providers").addEventListener("click", function () { switchTab("providers"); });
       document.getElementById("tab-routing").addEventListener("click", function () { switchTab("routes"); });
-      document.getElementById("scope-account").addEventListener("change", function () { if (app.draft) { app.draft.scope = "account"; renderScope(); } });
-      document.getElementById("scope-session").addEventListener("change", function () { if (app.draft) { app.draft.scope = "session"; renderScope(); } });
+      document.getElementById("scope-account").addEventListener("change", function () { changeScope("account", false); });
+      document.getElementById("scope-session").addEventListener("change", function () { changeScope("session", false); });
+      document.getElementById("import-session-button").addEventListener("click", function () { changeScope("account", true); });
       document.getElementById("model-source").addEventListener("change",function(e){if(app.draft){app.draft.configuredMode=e.target.value;refreshAction();}});
       document.getElementById("parameter-priority").addEventListener("change",function(e){if(app.draft){app.draft.parameterPriority=e.target.value;refreshAction();}});
       document.getElementById("add-provider-button").addEventListener("click", addProvider);
@@ -1126,7 +1154,7 @@
       document.getElementById("status-recheck-button").addEventListener("click", resolvePublicationStatus);
       document.getElementById("apply-button").addEventListener("click", function () { if (app.bridgeReady) applyViaBridge(); else generateOffline(); });
       window.addEventListener("resize", notifySizeSoon);
-      var initial = readInitialState(); if (initial) applyState(initial, "initial", "account"); refreshAction(); connectBridge();
+      var initial = readInitialState(); if (initial) applyState(initial, "initial"); refreshAction(); connectBridge();
     }
     window.__wb3pSettingsInternals = Object.freeze({
       PROTOCOLS: PROTOCOLS.slice(), EFFORT_ORDER: EFFORT_ORDER.slice(), normalizeConfiguredMode: normalizeConfiguredMode, normalizeParameterPriority: normalizeParameterPriority,

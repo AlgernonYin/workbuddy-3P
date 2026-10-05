@@ -2,9 +2,9 @@
 
 [简体中文](README.zh-CN.md)
 
-**Version:** 3.0.0 candidate, not published. Candidate evidence includes 237/237 local tests, selected official private-API/preflight checks, and one refresh/immediate-reuse check. A fresh-sandbox global acceptance run has not been completed; no release acceptance or production result is claimed.
+**Version:** 3.0.0 candidate, not published to `main`. Candidate evidence includes 237/237 local tests, selected official private-API/preflight checks, and one refresh/immediate-reuse check. A fresh-sandbox global acceptance run and human-run third-party acceptance have not been completed; no release acceptance or production result is claimed.
 
-WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets WorkBuddy use an OpenAI Chat Completions-compatible API that you control. Web and mobile clients share the cloud sandbox mechanism, so no client or web-page changes are required. Routed slots can still appear under their WorkBuddy names; opening the menu is not proof that live traffic is routed.
+WorkBuddy 3P is an unofficial, MIT-licensed plugin marketplace for cloud WorkBuddy / CodeBuddy Code. It lets WorkBuddy use an OpenAI Chat Completions-compatible API that you control. Web and mobile clients share the cloud sandbox mechanism, so the documented flow does not require client or web-page changes; physical-phone acceptance remains unverified. Routed slots can still appear under their WorkBuddy names; opening the menu is not proof that live traffic is routed.
 
 The plugin manages only the model configuration it owns. Existing user models that it does not manage are preserved.
 
@@ -34,7 +34,7 @@ A route is explicit: an official WorkBuddy slot points to `provider:model`, with
 }
 ```
 
-- New configurations use explicit routes and no routes are created automatically. No provider or vendor preset is selected by default, and no highest-effort default is offered.
+- New configurations use explicit routes and no routes are created automatically. No personal provider, vendor preset, or highest-tier default is selected by default. No highest-effort default is offered.
 - Legacy preset/inference modes and built-in presets are advanced compatibility paths for old configurations only. They are recognized only when an old configuration explicitly contains them; they are not the public default or onboarding flow.
 - Set effort per route from the model's declared `supportedEfforts`. A route-level effort wins over that model's default effort. Do not infer adjustable effort from `onlyReasoning`, and do not provide a highest-for-all bulk operation in the public account flow.
 
@@ -48,6 +48,8 @@ A route is explicit: an official WorkBuddy slot points to `provider:model`, with
 
 ## Account defaults and synchronization
 
+- In the default `account` scope, the panel view and `apply` use the last published account baseline. Ordinary account label edits update only that baseline; they do not globalize session parameters. If no baseline exists, the account view starts from an empty configuration. The first migration requires an explicit `importSession: true`; the panel exposes this as the advanced action **Import current session into account for the first time (explicit save required)** (`首次导入当前会话到账号（需明确保存）`).
+- Switching scope reloads that scope's independent view. Unsaved drafts from one scope are not copied automatically into the other.
 - Account saves go through the private WorkBuddy asset/profile route. Account credentials are the official Bearer access token plus refresh token, not a runtime model token. They belong only in the owner-side mode-600 runtime cache and the private profile; they are never returned to the panel, chat, or a public URL.
 - The first private credential sync must be explicitly authorized by the account owner. Its runtime connection/cache files remain gitignored and must not be committed, published, or copied into public manifests.
 - Host-only `apiKeyEnv`, `apiKeyFile`, and `apiKeyUrl` references are resolved privately during account apply and embedded only in the authorized private account package. The resolved value is never returned to the panel or written to a public view.
@@ -60,7 +62,7 @@ A route is explicit: an official WorkBuddy slot points to `provider:model`, with
 - A session apply that returns `localSyncPending`, `stateUnavailable`, partial, or otherwise incomplete is pending. Inspect status before any retry and do not automatically resend it.
 - After a committed account save, the plugin may report `requiresHostRefresh` or `requiresModelReselection`. A global account change is not an instant native model switch on the current host. Existing hosts need the upgraded plugin, a refreshed catalog, and a fresh model selection.
 - Active MCP sessions poll the private profile revision every 45 seconds and synchronize a changed account default. Synchronization is eventual and can be delayed by host sleep, reclamation, or process restart.
-- A fresh sandbox loads account-private profile data after plugin initialization. An old plugin instance must be upgraded before it can consume the current profile; reselect the model after upgrading.
+- A fresh sandbox adopts the published account configuration by default. Non-empty SDK options are not by themselves an explicit session-source selection, and connecting an account alone does not switch the source. An old plugin instance must be upgraded before it can consume the current profile; reselect the model after upgrading.
 - A read-only volume does not become writable because settings are account-scoped. `WB3P_CONFIG_JSON` remains an owner-controlled read-only source.
 
 ## Settings panel, draft mode, and discovery
@@ -128,7 +130,7 @@ MCP tools:
 | --- | --- |
 | `models_settings` | `status`, `panel`, `apply`, `discover`, `probe`, `connect`, `finish-connect`. `apply` defaults to `scope: "account"`; `scope: "session"` is an explicit advanced override. `connect`/`finish-connect` authorize only and do not switch the source. |
 | `models_status` | Report configuration/disk state, pending/retry-blocked publication, and last-good cache state. `runtimeVerified: false` does not prove live traffic. |
-| `models_switch` | Switch between `official`, `third-party`, and `default`; `scope` defaults to `account`, and `scope: "session"` is an explicit local override. |
+| `models_switch` | Switch between `official`, `third-party`, and `default`; `scope` defaults to `account`, and `scope: "session"` is an explicit local override. The `{ "mode": "official", "scope": "session" }` form is the local emergency fallback for broken provider/preset/route/capability/cache state. |
 | `models_resync` / `models_doctor` | Re-read configuration / run planned small requests. Doctor may incur provider charges. |
 | `models_effort` | Inspect or set effort preferences. `scope` remains `default`/`model`/`all`; `saveScope` defaults to `account`, and `saveScope: "session"` is explicit. Route-level effort wins over model/default effort. |
 
@@ -143,6 +145,14 @@ node scripts/sync-models.cjs --third-party
 node scripts/sync-models.cjs --status
 node scripts/sync-models.cjs --uninstall
 ```
+
+When provider, preset, route, capability, or cache state is broken, the current-sandbox emergency fallback is `models_switch` with `{ "mode": "official", "scope": "session" }` or:
+
+```bash
+node scripts/sync-models.cjs --official --scope session
+```
+
+This fallback requires no account authorization, is not globalized, and does not overwrite models whose ownership is uncertain. Repair the bad configuration before restoring 3P.
 
 Use `/models-settings` for the supported public workflow and `/models-status`, `/models-official`, `/models-third-party`, or `/models-effort` for the corresponding narrow operations.
 
@@ -167,7 +177,7 @@ Use `/models-settings` for the supported public workflow and `/models-status`, `
 - Input metadata is a host-side input limit, not provider capacity or compression evidence.
 - The endpoint probe checks a small completions request only. HTTP 200 without the marker is not completion.
 - Protocol translation is out of scope; configure an OpenAI Chat Completions-compatible endpoint.
-- Physical-phone behavior has not been verified. Treat mobile as sharing the cloud mechanism, not as device-tested.
+- Physical-phone and long-context behavior have not been verified. Treat mobile as sharing the cloud mechanism, not as device-tested, and do not mark either area as accepted.
 - Existing old plugin versions must be upgraded and the model reselected before they can consume the current account profile.
 
 **2.5.1 historical compatibility:** the old official-catalog fallback behavior is documented separately in [official switch compatibility](docs/official-switch-compatibility.md). It is historical compatibility, not the current public default.

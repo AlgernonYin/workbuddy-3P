@@ -97,7 +97,9 @@ function create(core,{fetchImpl=fetch,allowedDownloadHosts=[],pollIntervalMs=100
  }
  async function storeProfile(p,next,item,c,connectionOnly){
   next.accountSync=c;next.cloudVersion=item.version;next.cloudUid=item.uid;
-  if(connectionOnly||core.hasLocalOverrides?.(p.dir)&&!cached(p))next.connectionOnly=true;else delete next.connectionOnly;
+  // Host/plugin options may be non-empty in a clean sandbox; they are not an
+  // explicit connection-only state. Only finish-connect carries that marker.
+  if(connectionOnly===true)next.connectionOnly=true;else delete next.connectionOnly;
   await core.withLock(p.dir,()=>core.writeAtomic(cachePath(p),JSON.stringify(next)));
  }
  const pendingReceipt=a=>({ok:false,accountCommitted:null,publicationPending:a.status==='pending',outcomeUnknown:a.status!=='pending',retryBlocked:true,
@@ -110,7 +112,7 @@ function create(core,{fetchImpl=fetch,allowedDownloadHosts=[],pollIntervalMs=100
   const restored=await download(d,c,p);validateReadback(restored,c);
   if(restored.accountRevision!==a.revision)return pendingReceipt(a);
   validateReadback(restored,c,a);if(d.version!==a.expectedVersion)fail('ACCOUNT_READBACK_CONFLICT');
-  await storeProfile(p,restored,d,c,cached(p)?.connectionOnly===true);fs.rmSync(attemptPath(p),{force:true});
+  await storeProfile(p,restored,d,c,false);fs.rmSync(attemptPath(p),{force:true});
   return {ok:true,accountCommitted:true,recoveredPublication:true,revision:restored.accountRevision,version:d.version,backup:a.backup};
  }
  async function pullUnlocked(p,{strict=false}={}){
@@ -171,7 +173,7 @@ function create(core,{fetchImpl=fetch,allowedDownloadHosts=[],pollIntervalMs=100
     if(d.status==='ready'){
      const restored=await download(d,c,p);validateReadback(restored,c,attempt);if(d.version!==version)fail('ACCOUNT_READBACK_CONFLICT');
      const visible=await metadata(c,p);if(visible?.uid!==d.uid||visible?.version!==d.version)fail('ACCOUNT_READBACK_CONFLICT');
-     await storeProfile(p,restored,d,c,current.connectionOnly===true);fs.rmSync(attemptPath(p),{force:true});
+     await storeProfile(p,restored,d,c,false);fs.rmSync(attemptPath(p),{force:true});
      return {ok:true,accountCommitted:true,revision:next.accountRevision,version:d.version,backup};
     }
     if(n+1<pollAttempts)await new Promise(r=>setTimeout(r,pollIntervalMs));

@@ -2,9 +2,9 @@
 
 [English](README.md)
 
-**版本：** 3.0.0 候选，尚未发布。候选证据包括本地 237/237 测试、官方私有 API/preflight 的选择性检查，以及一次 refresh 后立即复用检查；尚未完成新沙箱全局验收，因此不声明发布验收或生产结果。
+**版本：** 3.0.0 候选，尚未发布到 `main`。候选证据包括本地 237/237 测试、官方私有 API/preflight 的选择性检查，以及一次 refresh 后立即复用检查；尚未完成新沙箱全局验收和真人第三方验收，因此不声明发布验收或生产结果。
 
-WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件市场。它让 WorkBuddy 使用你控制的 OpenAI Chat Completions 兼容 API。网页端和手机端共用云端沙箱机制，不需要修改客户端或网页。路由后的槽位仍可能显示 WorkBuddy 模型名；能打开菜单并不证明实际流量已经走第三方。
+WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件市场。它让 WorkBuddy 使用你控制的 OpenAI Chat Completions 兼容 API。网页端和手机端共用云端沙箱机制，本说明中的流程不要求修改客户端或网页；手机真机尚未验收。路由后的槽位仍可能显示 WorkBuddy 模型名；能打开菜单并不证明实际流量已经走第三方。
 
 插件只管理自己拥有的模型配置；不归它管理的既有用户模型保持不变。
 
@@ -34,7 +34,7 @@ WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件�
 }
 ```
 
-- 新配置使用显式路由，且不会自动生成任何路由。不会预选供应商或厂商 preset，也不提供最高 effort 默认值。
+- 新配置使用显式路由，且不会自动生成任何路由。公开默认不选择个人供应商、厂商 preset 或最高档默认，也不提供最高 effort 默认值。
 - 旧 preset/推导模式和内置 preset 只作为旧配置的高级兼容路径；仅在旧配置明确写入时识别，不是公开默认或上手流程。
 - 每条路由的 effort 必须来自该模型声明的 `supportedEfforts`。路由级 effort 优先于该模型默认 effort。不要从 `onlyReasoning` 推断可调 effort；公开账号流程不提供“全部最高”批量操作。
 
@@ -48,6 +48,8 @@ WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件�
 
 ## 账号默认值与同步
 
+- 默认 `account` scope 下，面板视图和 `apply` 基于最近一次已发布的账号 baseline。普通账号标签修改只更新该 baseline，不会把 session 参数全球化。没有 baseline 时，account 视图从空配置开始；首次迁移必须显式传入 `importSession: true`，面板高级入口为“首次导入当前会话到账号（需明确保存）”。
+- 切换 scope 会重新读取该 scope 的独立视图；未保存的其他 scope 草稿不会自动复制过来。
 - 账号保存通过 WorkBuddy 私有资产/profile 通道完成。账号凭据是官方 Bearer access token + refresh token，不是运行模型 token。它们只属于本人侧的 mode-600 运行时缓存和私有 profile，绝不返回给面板、聊天或公开 URL。
 - 首次私有凭据同步必须由账号所有者明确授权。运行时连接/缓存文件保持 gitignored，不得提交、发布或复制到公开 manifest。
 - `apiKeyEnv`、`apiKeyFile`、`apiKeyUrl` 等仅存在于宿主的引用，会在账号 apply 时私有解析，并且只嵌入账号所有者授权的私有账号包；解析后的值不会返回面板，也不会写入公开视图。
@@ -60,7 +62,7 @@ WorkBuddy 3P 是面向云端 WorkBuddy / CodeBuddy Code 的非官方 MIT 插件�
 - session apply 返回 `localSyncPending`、`stateUnavailable`、partial 或其它未完成状态时，一律视为 pending。先查状态，再决定是否重试；不要自动重发。
 - 账号保存提交后，插件可能返回 `requiresHostRefresh` 或 `requiresModelReselection`。全局账号变更不是当前 host 的瞬时原生模型切换。已有 host 需要升级插件、刷新目录并重新选择模型。
 - 活跃 MCP 会话每 45 秒轮询私有 profile revision，并在 revision 变化时同步账号默认值。同步是最终一致的，宿主休眠、回收或进程重启都可能延迟。
-- 新沙箱会在插件初始化后加载账号私有 profile 数据。已有旧 plugin 必须先升级，升级后重新选择模型。
+- 新沙箱默认采用已发布的账号配置。非空 SDK options 本身不构成显式 session 来源选择；仅连接账号也不会切换来源。已有旧 plugin 必须先升级，升级后重新选择模型。
 - 只读卷不会因为改成账号 scope 就变为可写。`WB3P_CONFIG_JSON` 仍然是由所有者控制的只读来源。
 
 ## 设置面板、草稿模式与发现
@@ -128,7 +130,7 @@ MCP 工具：
 | --- | --- |
 | `models_settings` | `status`、`panel`、`apply`、`discover`、`probe`、`connect`、`finish-connect`。`apply` 默认 `scope: "account"`；`scope: "session"` 只能作为显式高级覆盖。`connect`/`finish-connect` 只授权，不切换来源。 |
 | `models_status` | 报告配置/磁盘状态、pending/retry-blocked 发布状态和 last-good 缓存状态。`runtimeVerified: false` 不证明真实流量。 |
-| `models_switch` | 切换 `official`、`third-party` 或 `default`；`scope` 默认 `account`，`scope: "session"` 必须显式选择，作为本地覆盖。 |
+| `models_switch` | 切换 `official`、`third-party` 或 `default`；`scope` 默认 `account`，`scope: "session"` 必须显式选择，作为本地覆盖；`{ "mode": "official", "scope": "session" }` 是 provider/preset/route/capability/cache 损坏时的本沙箱紧急回退。 |
 | `models_resync` / `models_doctor` | 重新读取配置 / 对计划模型发小额请求。doctor 可能产生供应商费用。 |
 | `models_effort` | 查看或设置 effort 偏好。`scope` 仍为 `default`/`model`/`all`；`saveScope` 默认 `account`，`saveScope: "session"` 必须显式选择。路由级 effort 优先于模型/default effort。 |
 
@@ -143,6 +145,14 @@ node scripts/sync-models.cjs --third-party
 node scripts/sync-models.cjs --status
 node scripts/sync-models.cjs --uninstall
 ```
+
+当 provider、preset、route、capability 或 cache 状态损坏时，当前沙箱的紧急回退是 `models_switch` 的 `{ "mode": "official", "scope": "session" }` 或：
+
+```bash
+node scripts/sync-models.cjs --official --scope session
+```
+
+该回退不需要账号授权，不会全球化，也不会覆盖 ownership 不确定的模型。修复坏配置（bad configuration）后才能恢复 3P。
 
 公开流程优先使用 `/models-settings`；窄操作使用 `/models-status`、`/models-official`、`/models-third-party` 或 `/models-effort`。
 
@@ -167,7 +177,7 @@ node scripts/sync-models.cjs --uninstall
 - 输入元数据是宿主侧输入上限，不是供应商容量或压缩证据。
 - endpoint 探针只检查一个小 completion 请求。HTTP 200 且没有 marker 不算完成。
 - 协议翻译不属于范围；请配置 OpenAI Chat Completions 兼容 endpoint。
-- 手机真机行为尚未验收。手机端应视为共用云端机制，而不是已完成设备验证。
+- 手机真机和长上下文行为尚未实测。手机端只应视为共用云端机制，不能标为真机或长上下文验收成功。
 - 已有旧 plugin 必须先升级并重新选择模型，才能消费当前账号 profile。
 
 **2.5.1 历史兼容：** 旧官方目录 fallback 行为单独见 [官方切换兼容说明](docs/official-switch-compatibility.md)。它是历史兼容，不是当前公开默认。

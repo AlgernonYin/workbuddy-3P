@@ -26,6 +26,7 @@ const TOOLS = [
     inputSchema: { type: "object", additionalProperties: false, properties: {
       action: { type: "string", enum: ["status", "panel", "apply", "discover", "probe", "connect", "finish-connect"], default: "status" },
       scope: { enum: ["account", "session"], default: "account" },
+      importSession: { type: "boolean", description: "Explicit first-publication import of current session configuration and parameters. Never implicit; only when no published account baseline exists." },
       confirmedConfirmationTypes: { type: "array", items: {type:"string"} },
       providerId: { type: "string" }, model: { type: "string" }, allowBillable: { type: "boolean" },
       expectedRevision: { type: "string" }, patch: { type: "object", additionalProperties: false,
@@ -54,14 +55,14 @@ const TOOLS = [
 const clean = (r) => { if (!r || typeof r !== "object") return r; const c = { ...r }; delete c.dst; delete c.plan; return c; };
 async function callTool(name, args = {}) {
   if (name === "models_settings") {
-    if (!args || typeof args !== "object" || Array.isArray(args) || Object.keys(args).some(k => !["action", "scope", "confirmedConfirmationTypes", "expectedRevision", "patch", "providerId", "model", "allowBillable"].includes(k))) throw Error("invalid settings arguments");
+    if (!args || typeof args !== "object" || Array.isArray(args) || Object.keys(args).some(k => !["action", "scope", "importSession", "confirmedConfirmationTypes", "expectedRevision", "patch", "providerId", "model", "allowBillable"].includes(k))) throw Error("invalid settings arguments");
     const action = args.action || "status";
     if (["connect","finish-connect"].includes(action)) {if(Object.keys(args).some(k=>k!=="action"))throw Error("invalid account login arguments");return lib.accountLogin(action);}
     if (["discover", "probe"].includes(action)) return lib.providerRequest(args);
     if (args.providerId !== undefined || args.model !== undefined || args.allowBillable !== undefined) throw Error("invalid settings arguments");
     if (action === "apply") return lib.applySettings(args);
-    if (!["status", "panel"].includes(action) || args.patch !== undefined || args.expectedRevision !== undefined) throw Error("invalid settings action");
-    const state = await lib.settingsStatus();
+    if (!["status", "panel"].includes(action) || args.patch !== undefined || args.expectedRevision !== undefined || args.importSession !== undefined || args.confirmedConfirmationTypes !== undefined) throw Error("invalid settings action");
+    const state = await lib.settingsStatus({scope:args.scope||"account"});
     if (action === "panel") return { ...state, artifactPath: panel.artifact(state), artifactNote: "Fallback HTML is a draft editor only. Use the native MCP Apps panel for direct saving, or copy the generated instruction to the original chat." };
     return state;
   }
@@ -75,7 +76,7 @@ async function callTool(name, args = {}) {
     }
     const targetScope=args.scope||(args.model?"model":"default"),saveScope=args.saveScope||"account";
     if(!["set","reset"].includes(action)||!["model","default","all"].includes(targetScope)||!["account","session"].includes(saveScope)||action==="set"&&targetScope==="all"||action==="reset"&&args.level!==undefined||targetScope!=="model"&&args.model!==undefined||action==="set"&&!["on","off","minimal","low","medium","high","xhigh","max"].includes(args.level))throw Error("invalid effort action/scope combination");
-    const s=await lib.settingsStatus(),e=await lib.effortStatus(args.model?{model:args.model}:{}),patch={};
+    const s=await lib.settingsStatus({scope:saveScope}),e=await lib.effortStatus({scope:saveScope,...(args.model?{model:args.model}:{})}),patch={};
     if(targetScope==="model"){
       if(!args.model||e.models.length!==1)throw Error("an unambiguous model is required");
       patch.efforts={[e.models[0].target]:action==="reset"?null:args.level};
@@ -88,8 +89,8 @@ async function callTool(name, args = {}) {
   if (name === "models_switch") {
     if(!args||typeof args!=="object"||Object.keys(args).some(k=>!["mode","scope"].includes(k)))throw Error("invalid switch arguments");
     if (!["official", "third-party", "default"].includes(args.mode)) throw new Error("mode must be official, third-party or default");
-    const s=await lib.settingsStatus();
-    status=await lib.applySettings({action:"apply",scope:args.scope||"account",expectedRevision:s.revision,patch:{switchMode:args.mode}});
+    if(args.scope==="session"&&args.mode==="official")status=await lib.setSwitch("official",{scope:"session"});
+    else {const s=await lib.settingsStatus({scope:args.scope||"account"});status=await lib.applySettings({action:"apply",scope:args.scope||"account",expectedRevision:s.revision,patch:{switchMode:args.mode}});}
     return { ...lib.status(),...clean(status), requiresModelReselection: true,
         note: "Before the next message, use a non-routed official model (for example Hy4 preview), then reselect the target after the host reloads. Some hosts retain a removed custom-local ID; page reload alone is not proof of rebinding. Report any catalog warning or user-model conflict. This tool cannot update the active selection. New sandboxes follow account defaults; this is not a runtime traffic check." };
   }

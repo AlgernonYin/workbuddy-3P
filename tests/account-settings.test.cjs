@@ -33,7 +33,7 @@ function fixture(t,{connectedOnly=false,partial=false}={}){
  delete require.cache[script];const lib=require(script);
  require.cache[settingsScript].exports=factory;
  t.after(()=>{global.fetch=priorFetch;for(const k of Object.keys(process.env))if(!(k in previousEnv))delete process.env[k];Object.assign(process.env,previousEnv);delete require.cache[script];fs.rmSync(dir,{recursive:true,force:true});});
- return{dir,lib,calls,remote:()=>remote,changeRemote:c=>{remote.config=c;version='1.0.'+(Number(version.split('.')[2])+1);remote.accountRevision='rev-'+version;},preflight:fn=>{preflightHook=fn},setLocal:c=>fs.writeFileSync(path.join(dir,'workbuddy-3p.json'),JSON.stringify(c)),view:()=>lib.settingsStatus(),save:async patch=>{const s=await lib.settingsStatus();const r=await lib.applySettings({action:'apply',expectedRevision:s.revision,patch});assert.ok(!JSON.stringify(r).includes(canary));return r;}};
+ return{dir,lib,calls,remote:()=>remote,changeRemote:c=>{remote.config=c;version='1.0.'+(Number(version.split('.')[2])+1);remote.accountRevision='rev-'+version;},preflight:fn=>{preflightHook=fn},setLocal:c=>fs.writeFileSync(path.join(dir,'workbuddy-3p.json'),JSON.stringify(c)),view:options=>lib.settingsStatus(options),save:async (patch,options={})=>{const s=await lib.settingsStatus();const r=await lib.applySettings({action:'apply',expectedRevision:s.revision,patch,...options});assert.ok(!JSON.stringify(r).includes(canary));return r;}};
 }
 test('settings default is an account commit plus complete local adoption, not a session write',async t=>{
  const f=fixture(t);const r=await f.save({providers:{p:{label:'Global label'}},efforts:{'p:m':'high'},contexts:{'p:m':32000}});
@@ -45,18 +45,19 @@ test('settings default is an account commit plus complete local adoption, not a 
 });
 test('merely connecting and reading account status never hides existing session config/switch',async t=>{
  const f=fixture(t,{connectedOnly:true});const c=cfg();c.providers.p.label='Local label';f.setLocal(c);fs.writeFileSync(path.join(f.dir,'workbuddy-3p.switch'),'official\n');
- const s=await f.view();assert.equal(s.providers[0].label,'Local label');assert.equal(s.configuredMode,'official');assert.equal(s.sourceKind,'file');
+ const s=await f.view({scope:'session'});assert.equal(s.providers[0].label,'Local label');assert.equal(s.configuredMode,'official');assert.equal(s.sourceKind,'file');
+ const global=await f.view();assert.deepEqual(global.providers,[]);assert.equal(global.canImportSession,true);assert.equal(global.scope,'account');
  assert.equal(account.cached({dir:f.dir}).connectionOnly,true);assert.equal(fs.existsSync(path.join(f.dir,'workbuddy-3p.scope.json')),false);
 });
 test('host credential references are privately resolved into portable account settings',async t=>{
  const f=fixture(t,{connectedOnly:true});const c=cfg();delete c.providers.p.apiKey;c.providers.p.apiKeyEnv='WB3P_TEST_PORTABLE_KEY';f.setLocal(c);process.env.WB3P_TEST_PORTABLE_KEY=canary;
- const r=await f.save({providers:{p:{label:'Portable'}}});assert.equal(r.accountCommitted,true);
+ const r=await f.save({providers:{p:{label:'Portable'}}},{importSession:true});assert.equal(r.accountCommitted,true);
  assert.equal(f.remote().config.providers.p.apiKey,canary);assert.equal(f.remote().config.providers.p.apiKeyEnv,undefined);
  delete process.env.WB3P_TEST_PORTABLE_KEY;assert.equal((await f.view()).providers[0].credential.kind,'inline');
 });
 test('a source changed during publication stays intact and yields committed plus local sync pending',async t=>{
  const f=fixture(t,{connectedOnly:true});const external=cfg();external.providers.p.label='Concurrent edit';
- f.preflight(()=>f.setLocal(external));const r=await f.save({providers:{p:{label:'Published snapshot'}}});
+ f.preflight(()=>f.setLocal(external));const r=await f.save({providers:{p:{label:'Published snapshot'}}},{importSession:true});
  assert.equal(r.accountCommitted,true);assert.equal(r.localSyncPending,true);assert.equal(r.localSynced,false);assert.equal(f.remote().config.providers.p.label,'Published snapshot');
  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir,'workbuddy-3p.json'))).providers.p.label,'Concurrent edit');
  assert.equal(fs.existsSync(path.join(f.dir,'workbuddy-3p.scope.json')),false);
@@ -75,7 +76,7 @@ test('session export backs up an existing hidden local config and carries effect
 });
 test('two independent routes can declare different efforts including off for one imported model',async t=>{
  const f=fixture(t,{connectedOnly:true});const c=cfg();c.parameterPriority='3p';c.routes={'glm-5.1':{provider:'p',model:'m',effort:'high'},'glm-5.3-flash':{provider:'p',model:'m',effort:'off'}};f.setLocal(c);
- const s=await f.view(),high=s.models.find(x=>x.aliases.includes('glm-5.1')),off=s.models.find(x=>x.aliases.includes('glm-5.3-flash'));
+ const s=await f.view({scope:'session'}),high=s.models.find(x=>x.aliases.includes('glm-5.1')),off=s.models.find(x=>x.aliases.includes('glm-5.3-flash'));
  assert.notEqual(high.id,off.id);assert.equal(high.configuredEffort,'high');assert.equal(off.configuredEffort,'off');assert.equal(off.applied,true);
 });
 test('maintenance picks up an account revision change and updates an already running sandbox',async t=>{
@@ -85,10 +86,10 @@ test('maintenance picks up an account revision change and updates an already run
 test('independent native bindings do not fabricate an off toggle for host-limited upstream models',async t=>{
  const f=fixture(t,{connectedOnly:true});const c=cfg(),m=c.providers.p.models.m;
  c.providers.p.models={'deepseek-v4.1-flash':m};c.providers.p.extraModels=[];c.routes={'glm-5.1':{provider:'p',model:'deepseek-v4.1-flash',effort:'off'}};f.setLocal(c);
- await assert.rejects(f.view(),/does not support requested effort/);
+ await assert.rejects(f.view({scope:'session'}),/does not support requested effort/);
 });
 test('route thinking on uses the imported default instead of silently selecting the highest level',async t=>{
  const f=fixture(t,{connectedOnly:true});const c=cfg();c.parameterPriority='3p';c.routes={'glm-5.1':{provider:'p',model:'m',effort:'on'}};f.setLocal(c);
- const s=await f.view(),m=s.models.find(x=>x.aliases.includes('glm-5.1'));
+ const s=await f.view({scope:'session'}),m=s.models.find(x=>x.aliases.includes('glm-5.1'));
  assert.equal(m.requestedEffort,'on');assert.equal(m.configuredEffort,'on');assert.equal(m.baseEffort,'low');assert.equal(m.applied,true);
 });
